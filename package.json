@@ -1,22 +1,26 @@
 {
   "name": "ai_video_assisstant",
   "version": "0.1.0",
+  "main": "main.js",
+  "homepage": "./",
   "private": true,
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.36.3",
     "@testing-library/dom": "^10.4.0",
     "@testing-library/jest-dom": "^6.6.3",
     "@testing-library/react": "^16.2.0",
     "@testing-library/user-event": "^13.5.0",
+    "axios": "^1.6.7",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "react-scripts": "5.0.1",
     "web-vitals": "^2.1.4"
   },
   "scripts": {
-    "start": "react-scripts start",
+    "start": "electron .",
+    "dev": "npm run build && electron .",
     "build": "react-scripts build",
-    "test": "react-scripts test",
-    "eject": "react-scripts eject"
+    "react-start": "react-scripts start"
   },
   "eslintConfig": {
     "extends": [
@@ -35,5 +39,9 @@
       "last 1 firefox version",
       "last 1 safari version"
     ]
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2",
+    "electron": "^25.0.0"
   }
 }
