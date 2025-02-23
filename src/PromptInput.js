@@ -2,36 +2,29 @@
 import React, { useState, useEffect, forwardRef, useImperativeHandle } from 'react';
 
 const PromptInput = forwardRef(({ onSubmit }, ref) => {
-  // Default system prompt
   const defaultPrompt = 'You are an AI assistant that is viewing a video output stream of the user\'s selected window/application/etc. Make observations about what you see.';
   
-  // Initialize state with localStorage value or default
   const [prompt, setPrompt] = useState(() => {
     const savedPrompt = localStorage.getItem('system_prompt');
     return savedPrompt || defaultPrompt;
   });
 
-  // Save prompt to localStorage whenever it changes
   useEffect(() => {
     localStorage.setItem('system_prompt', prompt);
     console.log('System prompt updated and saved:', prompt);
   }, [prompt]);
 
-  // Expose the current prompt value to the parent via ref
-  useImperativeHandle(ref, () => ({
+  useImperativeHandle(ref, () => ({ 
     value: prompt,
   }));
 
-  // Handle input change
   const handleChange = (e) => {
     setPrompt(e.target.value);
   };
 
-  // Handle form submission without resetting the prompt
   const handleSubmit = () => {
     console.log('Submitting system prompt:', prompt);
     onSubmit(prompt);
-    // Do not reset prompt here to maintain persistence
   };
 
   return (

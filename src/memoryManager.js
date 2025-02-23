@@ -18,7 +18,7 @@ const useMemory = () => {
       }, 100);
       return;
     }
-    loadMemories();
+    loadMemories(); 
   }, []);
 
   const loadMemories = async () => {

@@ -21,7 +21,7 @@ function App() {
   const [boundingBox, setBoundingBox] = useState(null);
   const [croppedFrame, setCroppedFrame] = useState(null);
   const [isLightboxOpen, setIsLightboxOpen] = useState(false);
-  const [isGlobalHotkeyEnabled, setIsGlobalHotkeyEnabled] = useState(false);
+  const [isGlobalHotkeyEnabled, setIsGlobalHotkeyEnabled] = useState(true); // Default to true
   const { saveMemory, getRelevantMemories } = useMemory();
   const continuousInterval = useRef(null);
   const promptInputRef = useRef(null);
@@ -50,6 +50,8 @@ function App() {
     };
     fetchScreenSize();
 
+    window.electronAPI.send('toggle-global-hotkey', true);
+
     window.electronAPI.on('captured-frame', (frame) => {
       console.log('Captured frame received:', frame.substring(0, 50) + '...');
       setLatestFrame(frame);
@@ -63,8 +65,6 @@ function App() {
     window.electronAPI.on('disable-bounding-box', () => {
       console.log('Disabling bounding box mode from overlay');
       setIsBoundingBoxMode(false);
-      setBoundingBox(null);
-      setBoundingBoxFrame(null);
       window.electronAPI.toggleOverlay(false);
     });
 
@@ -124,6 +124,7 @@ function App() {
         setBoundingBox({ x, y, width, height });
         setBoundingBoxFrame(dataUrl);
         console.log('Bounding box set:', { x, y, width, height });
+        console.log('Preview should display with boundingBoxFrame:', dataUrl.substring(0, 50) + '...');
 
         if (mode === 'on-demand') {
           stream.getTracks().forEach(track => track.stop());
@@ -300,11 +301,13 @@ function App() {
   };
 
   const handlePromptSubmit = (prompt) => {
-    console.log('Prompt submitted:', { mode, prompt, boundingBox });
+    console.log('Prompt submitted:', { mode, prompt, boundingBox, isBoundingBoxMode });
     if (mode === 'on-demand' && prompt.trim()) {
-      if (boundingBox) {
-        console.log('Submitting on-demand prompt with bounding box:', prompt);
+      if (boundingBox && !isBoundingBoxMode && !boundingBoxFrame) {
+        console.log('Submitting on-demand prompt with bounding box to capture new frame:', prompt);
         window.electronAPI.captureArea(boundingBox, 'on-demand');
+      } else if (boundingBoxFrame) {
+        console.log('Using existing boundingBoxFrame for prompt:', prompt);
       } else {
         console.log('Submitting on-demand prompt with full video input:', prompt);
       }
@@ -354,21 +357,15 @@ function App() {
               if (latestFrame) cropFrame(latestFrame, box);
             }} 
           />
-          {isBoundingBoxMode && (
+          {boundingBoxFrame && (
             <div style={{ marginTop: '20px' }}>
               <h3 style={{ fontSize: '16px', marginBottom: '5px' }}>Bounding Box Preview:</h3>
-              {boundingBoxFrame ? (
-                <img
-                  src={boundingBoxFrame}
-                  alt="Bounding Box Preview"
-                  style={{ width: '100%', border: '2px solid #333', objectFit: 'contain', cursor: 'pointer' }}
-                  onClick={openLightbox}
-                />
-              ) : (
-                <div style={{ width: '100%', height: '150px', border: '2px solid #333', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: '#f9f9f9' }}>
-                  <p>No preview available</p>
-                </div>
-              )}
+              <img
+                src={boundingBoxFrame}
+                alt="Bounding Box Preview"
+                style={{ width: '100%', border: '2px solid #333', objectFit: 'contain', cursor: 'pointer' }}
+                onClick={openLightbox}
+              />
             </div>
           )}
         </div>
@@ -382,6 +379,8 @@ function App() {
           onDemandPrompt={onDemandPrompt}
           setOnDemandPrompt={setOnDemandPrompt}
           isRequestPending={isRequestPending}
+          isGlobalHotkeyEnabled={isGlobalHotkeyEnabled}
+          handleGlobalHotkeyToggle={handleGlobalHotkeyToggle}
         />
       </div>
       <div style={{ marginTop: '20px' }}>
@@ -418,12 +417,6 @@ function App() {
         <label>
           <input type="checkbox" checked={isVoiceEnabled} onChange={(e) => setIsVoiceEnabled(e.target.checked)} /> 
           Enable Voice
-        </label>
-      </div>
-      <div style={{ marginTop: '10px' }}>
-        <label>
-          <input type="checkbox" checked={isGlobalHotkeyEnabled} onChange={handleGlobalHotkeyToggle} /> 
-          Record Key '`' Global Hotkey
         </label>
       </div>
       <PromptInput onSubmit={(systemPrompt) => handlePrompt(mode === 'continuous' ? continuousPrompt : onDemandPrompt, 'manual')} ref={promptInputRef} />

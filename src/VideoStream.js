@@ -5,7 +5,7 @@ const VideoStream = ({ onFrame = () => {}, isBoundingBoxMode, onBoundingBoxDrawn
   const videoRef = useRef(null);
   const canvasRef = useRef(document.createElement('canvas'));
   const containerRef = useRef(null);
-  const [stream, setStream] = useState(null);
+  const [stream, setStream] = useState(null); 
   const [error, setError] = useState(null);
   const [sources, setSources] = useState([]);
   const [selectedSource, setSelectedSource] = useState('');
@@ -127,10 +127,12 @@ const VideoStream = ({ onFrame = () => {}, isBoundingBoxMode, onBoundingBoxDrawn
     if (dragBox) {
       console.log('Mouse up - Bounding box drawn:', dragBox);
       onBoundingBoxDrawn(dragBox);
-      setDragBox(null);
+      setDragBox(null); // Reset dragBox
+      setDragStart(null); // Reset dragStart to exit drawing state
+    } else if (dragStart) {
+      setDragStart(null); // Reset dragStart if no box was drawn
     }
-    setDragStart(null);
-    console.log('Drag cleared');
+    console.log('Drag state cleared');
   };
 
   const handleSourceChange = (e) => {
@@ -139,7 +141,7 @@ const VideoStream = ({ onFrame = () => {}, isBoundingBoxMode, onBoundingBoxDrawn
     console.log('Selected source:', newSource);
   };
 
-  const videoWidth = 300; // Reduced to fit within parent container (300px width in App.js)
+  const videoWidth = 300;
   const aspectRatio = videoSize.width && videoSize.height ? videoSize.height / videoSize.width : 9 / 16;
   const videoHeight = videoWidth * aspectRatio;
 
@@ -170,7 +172,7 @@ const VideoStream = ({ onFrame = () => {}, isBoundingBoxMode, onBoundingBoxDrawn
           position: 'relative',
           width: `${videoWidth}px`,
           height: `${videoHeight}px`,
-          overflow: 'hidden', // Prevents overflow outside container
+          overflow: 'hidden',
         }}
         onMouseDown={handleMouseDown}
         onMouseMove={handleMouseMove}

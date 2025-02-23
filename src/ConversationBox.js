@@ -1,5 +1,5 @@
 // BEGIN ConversationBox.js
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useEffect, useRef } from 'react';
 
 const ConversationBox = ({ 
   history, 
@@ -10,29 +10,18 @@ const ConversationBox = ({
   setContinuousPrompt, 
   onDemandPrompt, 
   setOnDemandPrompt, 
-  isRequestPending 
+  isRequestPending,
+  isGlobalHotkeyEnabled,
+  handleGlobalHotkeyToggle
 }) => {
-  const [isExpanded, setIsExpanded] = useState(true); // Default to expanded for modern chat feel
-  const [isUserScrolling, setIsUserScrolling] = useState(false);
-  const expandedRef = useRef(null);
+  const conversationRef = useRef(null);
 
-  const toggleExpand = () => setIsExpanded(!isExpanded);
-
-  // Auto-scroll to bottom unless user is scrolling
+  // Auto-scroll to bottom
   useEffect(() => {
-    if (isExpanded && expandedRef.current && !isUserScrolling) {
-      expandedRef.current.scrollTop = expandedRef.current.scrollHeight;
+    if (conversationRef.current) {
+      conversationRef.current.scrollTop = conversationRef.current.scrollHeight;
     }
-  }, [history, isExpanded, isUserScrolling]);
-
-  // Detect user scrolling
-  const handleScroll = () => {
-    if (isExpanded && expandedRef.current) {
-      const { scrollTop, scrollHeight, clientHeight } = expandedRef.current;
-      const isAtBottom = scrollTop + clientHeight >= scrollHeight - 10; // 10px tolerance
-      setIsUserScrolling(!isAtBottom);
-    }
-  };
+  }, [history]);
 
   const handlePromptChange = (e) => {
     if (mode === 'continuous') {
@@ -52,9 +41,9 @@ const ConversationBox = ({
   };
 
   return (
-    <div style={{ marginBottom: '20px', display: 'flex', flexDirection: 'column', height: '100%' }}>
+    <div style={{ marginBottom: '20px', display: 'flex', flexDirection: 'column', flex: 1, width: '100%' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
-        <div style={{ display: 'flex', gap: '10px' }}>
+        <div style={{ float: 'left', display: 'flex', gap: '10px' }}>
           <label style={{ fontSize: '14px', fontWeight: 'bold' }}>Mode:</label>
           <button
             onClick={() => setMode('on-demand')}
@@ -80,58 +69,60 @@ const ConversationBox = ({
               borderRadius: '5px',
               cursor: 'pointer',
               fontSize: '14px',
+              textDecoration: 'line-through',
             }}
+            disabled
           >
             Continuous
           </button>
         </div>
-        <button
-          onClick={toggleExpand}
-          style={{ padding: '5px 10px', fontSize: '14px', backgroundColor: '#e9ecef', border: 'none', borderRadius: '5px', cursor: 'pointer' }}
-        >
-          {isExpanded ? 'Collapse' : 'Expand'}
-        </button>
+        <label style={{ float: 'right', fontSize: '14px' }}>
+          <input
+            type="checkbox"
+            checked={isGlobalHotkeyEnabled}
+            onChange={handleGlobalHotkeyToggle}
+          />
+          <span dangerouslySetInnerHTML={{ __html: '<b>`</b> Hotkey' }} />
+        </label>
       </div>
-      {isExpanded && (
-        <div
-          ref={expandedRef}
-          onScroll={handleScroll}
-          style={{
-            border: '1px solid #ccc',
-            padding: '10px',
-            backgroundColor: '#fff',
-            flex: 1,
-            overflowY: 'auto',
-            maxWidth: '1000px',
-            borderRadius: '5px',
-            boxShadow: '0 2px 5px rgba(0,0,0,0.1)',
-          }}
-        >
-          {history.length === 0 ? (
-            <div style={{ textAlign: 'center', color: '#666', padding: '20px' }}>
-              Start a conversation...
+      <div
+        ref={conversationRef}
+        style={{
+          border: '1px solid #ccc',
+          padding: '10px',
+          backgroundColor: '#fff',
+          flex: 1,
+          overflowY: 'auto',
+          borderRadius: '5px',
+          boxShadow: '0 2px 5px rgba(0,0,0,0.1)',
+          width: '100%', // Ensure it takes full width
+        }}
+      >
+        {history.length === 0 ? (
+          <div style={{ textAlign: 'center', color: '#666', padding: '20px' }}>
+            Start a conversation...
+          </div>
+        ) : (
+          history.map((message, index) => (
+            <div
+              key={index}
+              style={{
+                margin: '10px 0',
+                padding: '10px',
+                backgroundColor: message.role === 'user' ? '#f1f3f5' : '#e9ecef',
+                borderRadius: '5px',
+                width: '70%', // 70% of container width
+                float: message.role === 'user' ? 'right' : 'left', // Float right for user, left for AI
+                textAlign: message.role === 'user' ? 'right' : 'left',
+                clear: 'both', // Prevent overlap with previous messages
+              }}
+            >
+              <strong>{message.role === 'user' ? 'You: ' : 'AI: '}</strong>
+              <span style={{ whiteSpace: 'pre-wrap' }}>{message.content}</span>
             </div>
-          ) : (
-            history.map((message, index) => (
-              <div
-                key={index}
-                style={{
-                  margin: '10px 0',
-                  padding: '10px',
-                  backgroundColor: message.role === 'user' ? '#f1f3f5' : '#e9ecef',
-                  borderRadius: '5px',
-                  maxWidth: '80%',
-                  alignSelf: message.role === 'user' ? 'flex-end' : 'flex-start',
-                  textAlign: message.role === 'user' ? 'right' : 'left',
-                }}
-              >
-                <strong>{message.role === 'user' ? 'You: ' : 'AI: '}</strong>
-                <span style={{ whiteSpace: 'pre-wrap' }}>{message.content}</span>
-              </div>
-            ))
-          )}
-        </div>
-      )}
+          ))
+        )}
+      </div>
       <form onSubmit={handleSubmit} style={{ marginTop: '10px' }}>
         <input
           type="text"
@@ -140,16 +131,15 @@ const ConversationBox = ({
           placeholder={`Type your ${mode} prompt...`}
           style={{
             width: '100%',
-            maxWidth: '1000px',
             padding: '10px',
             fontSize: '16px',
             border: '1px solid #ccc',
             borderRadius: '5px',
             boxShadow: 'inset 0 1px 3px rgba(0,0,0,0.1)',
             boxSizing: 'border-box',
-            height: '40px', // Sentence height
-            overflowX: 'auto', // Horizontal scroll for long text
-            whiteSpace: 'nowrap', // Keeps it single-line with scrolling
+            height: '40px',
+            overflowX: 'auto',
+            whiteSpace: 'nowrap',
           }}
         />
         {mode === 'on-demand' && (

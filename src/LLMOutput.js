@@ -16,7 +16,7 @@ const LLMOutput = ({ response }) => (
       }}
     >
       {response || 'Waiting for your prompt...'}
-    </p>
+    </p> 
   </div>
 );
 
