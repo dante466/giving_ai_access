@@ -20,7 +20,7 @@ const PromptInput = forwardRef(({ onSubmit }, ref) => {
 
   const handleChange = (e) => {
     setPrompt(e.target.value);
-  };
+  }; 
 
   const handleSubmit = () => {
     console.log('Submitting system prompt:', prompt);

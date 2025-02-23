@@ -19,6 +19,6 @@ const LLMOutput = ({ response }) => (
     </p> 
   </div>
 );
-
+ 
 export default LLMOutput;
 // END LLMOutput.js

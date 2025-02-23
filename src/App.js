@@ -1,4 +1,3 @@
-// BEGIN App.js
 import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
 import VideoStream from './VideoStream';
@@ -12,22 +11,33 @@ function App() {
   const [boundingBoxFrame, setBoundingBoxFrame] = useState(null);
   const [openAiApiKey, setOpenAiApiKey] = useState('');
   const [anthropicApiKey, setAnthropicApiKey] = useState('');
-  const [selectedModel, setSelectedModel] = useState('gpt-4o'); // Default to GPT-4o
+  const [selectedModel, setSelectedModel] = useState('gpt-4o');
   const [continuousPrompt, setContinuousPrompt] = useState('');
   const [onDemandPrompt, setOnDemandPrompt] = useState('');
   const [isRequestPending, setIsRequestPending] = useState(false);
+  const [isGeneratingResponse, setIsGeneratingResponse] = useState(false);
   const [isVoiceEnabled, setIsVoiceEnabled] = useState(false);
   const [isBoundingBoxMode, setIsBoundingBoxMode] = useState(false);
   const [boundingBox, setBoundingBox] = useState(null);
   const [croppedFrame, setCroppedFrame] = useState(null);
   const [isLightboxOpen, setIsLightboxOpen] = useState(false);
-  const [isGlobalHotkeyEnabled, setIsGlobalHotkeyEnabled] = useState(true); // Default to true
+  const [isGlobalHotkeyEnabled, setIsGlobalHotkeyEnabled] = useState(true);
   const { saveMemory, getRelevantMemories } = useMemory();
   const continuousInterval = useRef(null);
   const promptInputRef = useRef(null);
   const [mode, setMode] = useState('on-demand');
   const [screenSize, setScreenSize] = useState({ width: 0, height: 0 });
   const [isLoadingScreenSize, setIsLoadingScreenSize] = useState(true);
+
+  const removeListeners = () => {
+    console.log('Removing IPC listeners');
+    window.electronAPI.on('captured-frame', () => {});
+    window.electronAPI.on('capture-error', () => {});
+    window.electronAPI.on('disable-bounding-box', () => {});
+    window.electronAPI.on('toggle-bounding-box', () => {});
+    window.electronAPI.on('perform-capture', () => {});
+    window.electronAPI.on('reset-state', () => {});
+  };
 
   useEffect(() => {
     const savedOpenAiKey = localStorage.getItem('openai_api_key');
@@ -52,6 +62,8 @@ function App() {
 
     window.electronAPI.send('toggle-global-hotkey', true);
 
+    removeListeners();
+
     window.electronAPI.on('captured-frame', (frame) => {
       console.log('Captured frame received:', frame.substring(0, 50) + '...');
       setLatestFrame(frame);
@@ -65,6 +77,8 @@ function App() {
     window.electronAPI.on('disable-bounding-box', () => {
       console.log('Disabling bounding box mode from overlay');
       setIsBoundingBoxMode(false);
+      setBoundingBox(null);
+      setBoundingBoxFrame(null);
       window.electronAPI.toggleOverlay(false);
     });
 
@@ -113,24 +127,29 @@ function App() {
         await video.play();
         console.log('Stream video dimensions:', video.videoWidth, video.videoHeight);
 
+        const adjustedX = Math.max(0, Math.min(x, video.videoWidth - width));
+        const adjustedY = Math.max(0, Math.min(y, video.videoHeight - height));
+        console.log('Adjusted capture coordinates:', { adjustedX, adjustedY, width, height });
+
         const canvas = document.createElement('canvas');
         canvas.width = width;
         canvas.height = height;
         const ctx = canvas.getContext('2d');
-        ctx.drawImage(video, x, y, width, height, 0, 0, width, height);
+        ctx.drawImage(video, adjustedX, adjustedY, width, height, 0, 0, width, height);
         const dataUrl = canvas.toDataURL('image/jpeg', 0.5);
         console.log('Bounding box frame captured:', dataUrl.substring(0, 50) + '...');
 
-        setBoundingBox({ x, y, width, height });
+        console.log('Capture coordinates before adjustment:', { x, y, width, height });
+        setBoundingBox({ x: adjustedX, y: adjustedY, width, height });
+        console.log('Bounding box set:', { x: adjustedX, y: adjustedY, width, height });
         setBoundingBoxFrame(dataUrl);
-        console.log('Bounding box set:', { x, y, width, height });
         console.log('Preview should display with boundingBoxFrame:', dataUrl.substring(0, 50) + '...');
 
         if (mode === 'on-demand') {
           stream.getTracks().forEach(track => track.stop());
         } else if (mode === 'continuous') {
           const interval = setInterval(() => {
-            ctx.drawImage(video, x, y, width, height, 0, 0, width, height);
+            ctx.drawImage(video, adjustedX, adjustedY, width, height, 0, 0, width, height);
             const newDataUrl = canvas.toDataURL('image/jpeg', 0.5);
             setBoundingBoxFrame(newDataUrl);
             console.log('Continuous bounding box frame updated:', newDataUrl.substring(0, 50) + '...');
@@ -146,8 +165,19 @@ function App() {
       }
     });
 
-    return () => {
+    window.electronAPI.on('reset-state', () => {
+      console.log('Resetting app state on reload');
+      setLatestFrame(null);
+      setBoundingBoxFrame(null);
+      setBoundingBox(null);
+      setIsBoundingBoxMode(false);
       window.electronAPI.toggleOverlay(false);
+    });
+
+    return () => {
+      removeListeners();
+      window.electronAPI.toggleOverlay(false);
+      if (continuousInterval.current) clearInterval(continuousInterval.current);
     };
   }, []);
 
@@ -199,7 +229,7 @@ function App() {
       return;
     }
 
-    if (!boundingBox && latestFrame) {
+    if (!boundingBoxFrame && !croppedFrame && latestFrame) {
       frameToSend = latestFrame;
       usedFullFrame = true;
       console.log('No bounding box set; defaulting to full video input:', frameToSend.substring(0, 50) + '...');
@@ -211,6 +241,9 @@ function App() {
       return;
     }
 
+    // Add user message immediately and set loading state
+    setConversationHistory([...conversationHistory, { role: 'user', content: userPrompt }]);
+    setIsGeneratingResponse(true);
     setIsRequestPending(true);
     console.log('Request pending set to true, using frame:', frameToSend.substring(0, 50) + '...');
     const relevantMemories = getRelevantMemories(userPrompt);
@@ -264,9 +297,8 @@ function App() {
 
       const llmResponse = selectedModel === 'gpt-4o' ? res.data.choices[0].message.content : res.data.content[0].text;
       console.log('LLM response:', llmResponse);
-      setConversationHistory([
-        ...conversationHistory,
-        { role: 'user', content: userPrompt },
+      setConversationHistory(prev => [
+        ...prev,
         { role: 'assistant', content: llmResponse },
       ]);
       if (llmResponse.toLowerCase().includes('advice')) {
@@ -276,8 +308,9 @@ function App() {
         window.speechSynthesis.speak(new SpeechSynthesisUtterance(llmResponse));
       }
     } catch (error) {
-      setConversationHistory([...conversationHistory, { role: 'assistant', content: `Error: ${error.response?.data?.error?.message || error.message}` }]);
+      setConversationHistory(prev => [...prev, { role: 'assistant', content: `Error: ${error.response?.data?.error?.message || error.message}` }]);
     } finally {
+      setIsGeneratingResponse(false);
       setIsRequestPending(false);
       console.log('Request pending reset to false');
     }
@@ -336,6 +369,12 @@ function App() {
     setIsLightboxOpen(false);
   };
 
+  const clearBoundingBoxPreview = () => {
+    console.log('Clearing bounding box preview');
+    setBoundingBoxFrame(null);
+    setBoundingBox(null);
+  };
+
   if (isLoadingScreenSize) {
     return <div>Loading screen size...</div>;
   }
@@ -359,7 +398,24 @@ function App() {
           />
           {boundingBoxFrame && (
             <div style={{ marginTop: '20px' }}>
-              <h3 style={{ fontSize: '16px', marginBottom: '5px' }}>Bounding Box Preview:</h3>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <h3 style={{ fontSize: '16px', marginBottom: '5px' }}>Bounding Box Preview:</h3>
+                <button
+                  onClick={clearBoundingBoxPreview}
+                  style={{
+                    fontSize: '16px',
+                    padding: '2px 8px',
+                    backgroundColor: '#ff4444',
+                    color: '#fff',
+                    border: 'none',
+                    borderRadius: '3px',
+                    cursor: 'pointer',
+                  }}
+                  title="Clear Bounding Box Preview"
+                >
+                  X
+                </button>
+              </div>
               <img
                 src={boundingBoxFrame}
                 alt="Bounding Box Preview"
@@ -379,6 +435,7 @@ function App() {
           onDemandPrompt={onDemandPrompt}
           setOnDemandPrompt={setOnDemandPrompt}
           isRequestPending={isRequestPending}
+          isGeneratingResponse={isGeneratingResponse}
           isGlobalHotkeyEnabled={isGlobalHotkeyEnabled}
           handleGlobalHotkeyToggle={handleGlobalHotkeyToggle}
         />
@@ -427,7 +484,7 @@ function App() {
             position: 'fixed',
             top: 0,
             left: 0,
-            width: '100%',
+            width: '100%', 
             height: '100%',
             backgroundColor: 'rgba(0, 0, 0, 0.8)',
             display: 'flex',
@@ -465,4 +522,3 @@ function App() {
 }
 
 export default App;
-// END App.js

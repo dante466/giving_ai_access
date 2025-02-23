@@ -61,7 +61,7 @@ window.electronAPI.on('start-drawing', (mode) => {
     box.height = e.clientY - startY;
     box.x = box.width < 0 ? e.clientX : startX;
     box.y = box.height < 0 ? e.clientY : startY;
-    box.width = Math.abs(box.width);
+    box.width = Math.abs(box.width); 
     box.height = Math.abs(box.height);
     drawBox();
   };

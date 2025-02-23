@@ -25,7 +25,7 @@ function createMainWindow() {
   });
 
   const indexPath = path.resolve(__dirname, 'build', 'index.html');
-  console.log('Loading index:', indexPath);
+  console.log('Loading index:', indexPath); 
   mainWindow.loadFile(indexPath).catch((err) => {
     console.error('Failed to load index.html:', err);
     mainWindow.loadURL('data:text/html,<h1>Error: Could not load app</h1><p>' + err.message + '</p>');
@@ -34,6 +34,19 @@ function createMainWindow() {
   mainWindow.webContents.on('did-finish-load', () => {
     console.log('Main window loaded—checking electronAPI...');
     mainWindow.webContents.executeJavaScript('console.log("electronAPI exists:", !!window.electronAPI)');
+    if (overlayWindow) {
+      overlayWindow.close();
+      overlayWindow = null;
+    }
+    mainWindow.webContents.send('reset-state');
+  });
+
+  mainWindow.on('closed', () => {
+    mainWindow = null;
+    if (overlayWindow) {
+      overlayWindow.close();
+      overlayWindow = null;
+    }
   });
 }
 
@@ -65,6 +78,7 @@ function createOverlayWindow() {
   });
 
   overlayPosition = { x: minX, y: minY };
+  console.log('Overlay position set:', overlayPosition);
 
   const bounds = overlayWindow.getBounds();
   console.log('Overlay window created with bounds:', bounds);
@@ -84,6 +98,11 @@ function createOverlayWindow() {
 
   overlayWindow.webContents.on('did-finish-load', () => {
     console.log('Overlay window loaded');
+  });
+
+  overlayWindow.on('closed', () => {
+    overlayWindow = null;
+    console.log('Overlay window closed');
   });
 }
 
@@ -141,6 +160,7 @@ ipcMain.on('get-sources', async (event) => {
 });
 
 ipcMain.on('toggle-overlay', (event, enable) => {
+  console.log('Toggle overlay:', enable);
   if (enable && !overlayWindow) {
     createOverlayWindow();
   } else if (!enable && overlayWindow) {
@@ -168,9 +188,9 @@ ipcMain.on('capture-area', async (event, { x, y, width, height, mode }) => {
   console.log('All displays:', displays.map(d => ({ id: d.id, bounds: d.bounds })));
 
   const targetDisplay = displays.find(d => {
-    const { x, y, width, height } = d.bounds;
-    return centerX >= x && centerX < x + width && centerY >= y && centerY < y + height;
-  });
+    const { x: dx, y: dy, width: dw, height: dh } = d.bounds;
+    return centerX >= dx && centerX < dx + dw && centerY >= dy && centerY < dy + dh;
+  }) || displays[0];
 
   if (!targetDisplay) {
     console.error('No display found for coordinates:', { centerX, centerY });
@@ -181,27 +201,18 @@ ipcMain.on('capture-area', async (event, { x, y, width, height, mode }) => {
     const sources = await desktopCapturer.getSources({ types: ['screen'] });
     console.log('Available sources:', sources.map(s => ({ id: s.id, name: s.name, display_id: s.display_id })));
 
-    const source = sources.find(s => s.display_id === String(targetDisplay.id)) || 
-                  sources[displays.indexOf(targetDisplay)] || 
-                  sources[0];
+    const source = sources.find(s => s.display_id === String(targetDisplay.id)) || sources[0];
     if (!source) {
       console.error('No matching source found for display:', targetDisplay);
       return;
     }
 
-    const relativeX = Math.max(0, Math.min(screenX - targetDisplay.bounds.x, targetDisplay.bounds.width - width));
-    const relativeY = Math.max(0, Math.min(screenY - targetDisplay.bounds.y, targetDisplay.bounds.height - height));
+    const scaleFactor = targetDisplay.scaleFactor || 1;
+    const relativeX = Math.max(0, Math.min((screenX - targetDisplay.bounds.x) / scaleFactor, targetDisplay.bounds.width - width));
+    const relativeY = Math.max(0, Math.min((screenY - targetDisplay.bounds.y) / scaleFactor, targetDisplay.bounds.height - height));
 
-    console.log('Sending capture:', { 
-      sourceId: source.id, 
-      x: relativeX, 
-      y: relativeY, 
-      width, 
-      height, 
-      mode, 
-      displayWidth: targetDisplay.bounds.width, 
-      displayHeight: targetDisplay.bounds.height 
-    });
+    console.log('Raw coordinates from overlay:', { x, y, width, height });
+    console.log('Adjusted capture coordinates:', { relativeX, relativeY, width, height, scaleFactor, targetDisplay: targetDisplay.bounds });
 
     mainWindow.webContents.send('perform-capture', { 
       sourceId: source.id, 
@@ -209,9 +220,9 @@ ipcMain.on('capture-area', async (event, { x, y, width, height, mode }) => {
       y: relativeY, 
       width, 
       height, 
-      mode,
+      mode, 
       displayWidth: targetDisplay.bounds.width,
-      displayHeight: targetDisplay.bounds.height
+      displayHeight: targetDisplay.bounds.height 
     });
   } catch (err) {
     console.error('Capture error:', err);

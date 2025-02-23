@@ -1,7 +1,7 @@
 // BEGIN VideoStream.js
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState, useCallback, memo } from 'react';
 
-const VideoStream = ({ onFrame = () => {}, isBoundingBoxMode, onBoundingBoxDrawn }) => {
+const VideoStream = memo(({ onFrame = () => {}, isBoundingBoxMode, onBoundingBoxDrawn }) => {
   const videoRef = useRef(null);
   const canvasRef = useRef(document.createElement('canvas'));
   const containerRef = useRef(null);
@@ -13,6 +13,39 @@ const VideoStream = ({ onFrame = () => {}, isBoundingBoxMode, onBoundingBoxDrawn
   const [videoSize, setVideoSize] = useState({ width: 0, height: 0 });
   const [dragStart, setDragStart] = useState(null);
   const [dragBox, setDragBox] = useState(null);
+  const streamRef = useRef(null);
+
+  const startStream = useCallback(async () => {
+    if (!selectedSource || error) return;
+
+    if (streamRef.current) {
+      console.log('Stopping existing stream');
+      streamRef.current.getTracks().forEach(track => track.stop());
+    }
+
+    console.log('Starting stream for:', selectedSource);
+    try {
+      const newStream = await navigator.mediaDevices.getUserMedia({
+        audio: false,
+        video: { mandatory: { chromeMediaSource: 'desktop', chromeMediaSourceId: selectedSource } },
+      });
+      streamRef.current = newStream;
+      setStream(newStream);
+      if (videoRef.current) {
+        videoRef.current.srcObject = newStream;
+        videoRef.current.onloadedmetadata = () => {
+          const { videoWidth, videoHeight } = videoRef.current;
+          console.log('Video dimensions:', videoWidth, 'x', videoHeight);
+          setVideoSize({ width: videoWidth, height: videoHeight });
+        };
+        videoRef.current.play().catch(err => console.error('Initial play error:', err));
+        console.log('Stream active');
+      }
+    } catch (err) {
+      setError(`Stream error: ${err.message}`);
+      console.error('Stream failed:', err);
+    }
+  }, [selectedSource, error]);
 
   useEffect(() => {
     console.log('Requesting sources...');
@@ -27,45 +60,19 @@ const VideoStream = ({ onFrame = () => {}, isBoundingBoxMode, onBoundingBoxDrawn
         setSelectedSource(sourceList[0].id);
       }
     });
+
+    return () => {
+      if (streamRef.current) {
+        console.log('Cleaning up stream on unmount');
+        streamRef.current.getTracks().forEach(track => track.stop());
+        streamRef.current = null;
+      }
+    };
   }, []);
 
   useEffect(() => {
-    if (!selectedSource || error) return;
-
-    if (stream) {
-      stream.getTracks().forEach((track) => track.stop());
-      setStream(null);
-    }
-
-    console.log('Starting stream for:', selectedSource);
-    navigator.mediaDevices.getUserMedia({
-      audio: false,
-      video: { mandatory: { chromeMediaSource: 'desktop', chromeMediaSourceId: selectedSource } },
-    })
-      .then((newStream) => {
-        setStream(newStream);
-        if (videoRef.current) {
-          videoRef.current.srcObject = newStream;
-          videoRef.current.onloadedmetadata = () => {
-            const { videoWidth, videoHeight } = videoRef.current;
-            console.log('Video dimensions:', videoWidth, 'x', videoHeight);
-            setVideoSize({ width: videoWidth, height: videoHeight });
-          };
-          videoRef.current.play().catch((err) => console.error('Play error:', err));
-          console.log('Stream active');
-        }
-      })
-      .catch((err) => {
-        setError(`Stream error: ${err.message}`);
-        console.error('Stream failed:', err);
-      });
-
-    return () => {
-      if (stream) {
-        stream.getTracks().forEach((track) => track.stop());
-      }
-    };
-  }, [selectedSource]);
+    startStream();
+  }, [startStream]);
 
   useEffect(() => {
     if (!stream || error) return;
@@ -89,6 +96,22 @@ const VideoStream = ({ onFrame = () => {}, isBoundingBoxMode, onBoundingBoxDrawn
       clearInterval(interval);
     };
   }, [stream, error, onFrame]);
+
+  useEffect(() => {
+    console.log('Bounding box mode changed:', isBoundingBoxMode);
+    if (stream && videoRef.current) {
+      const video = videoRef.current;
+      console.log('Video srcObject exists:', !!video.srcObject, 'Paused:', video.paused);
+      if (!video.srcObject) {
+        console.log('Reattaching stream to video element');
+        video.srcObject = stream;
+      }
+      if (video.paused) {
+        console.log('Restarting video playback');
+        video.play().catch(err => console.error('Mode change play error:', err));
+      }
+    }
+  }, [isBoundingBoxMode, stream]);
 
   const handleMouseDown = (e) => {
     if (!isBoundingBoxMode || !videoRef.current) return;
@@ -127,10 +150,10 @@ const VideoStream = ({ onFrame = () => {}, isBoundingBoxMode, onBoundingBoxDrawn
     if (dragBox) {
       console.log('Mouse up - Bounding box drawn:', dragBox);
       onBoundingBoxDrawn(dragBox);
-      setDragBox(null); // Reset dragBox
-      setDragStart(null); // Reset dragStart to exit drawing state
+      setDragBox(null);
+      setDragStart(null);
     } else if (dragStart) {
-      setDragStart(null); // Reset dragStart if no box was drawn
+      setDragStart(null);
     }
     console.log('Drag state cleared');
   };
@@ -183,7 +206,7 @@ const VideoStream = ({ onFrame = () => {}, isBoundingBoxMode, onBoundingBoxDrawn
           autoPlay
           muted
           style={videoStyle}
-        />
+        /> 
         <div style={overlayStyle}></div>
       </div>
       {error && <div style={{ color: 'red', marginTop: '10px', fontSize: '16px' }}>{error}</div>}
@@ -214,7 +237,7 @@ const VideoStream = ({ onFrame = () => {}, isBoundingBoxMode, onBoundingBoxDrawn
       </div>
     </div>
   );
-};
+});
 
 export default VideoStream;
 // END VideoStream.js

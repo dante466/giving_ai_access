@@ -20,7 +20,7 @@ const useMemory = () => {
     }
     loadMemories(); 
   }, []);
-
+ 
   const loadMemories = async () => {
     try {
       const exists = await window.electronAPI.existsSync(MEMORY_FILE);

@@ -11,6 +11,7 @@ const ConversationBox = ({
   onDemandPrompt, 
   setOnDemandPrompt, 
   isRequestPending,
+  isGeneratingResponse,
   isGlobalHotkeyEnabled,
   handleGlobalHotkeyToggle
 }) => {
@@ -21,7 +22,7 @@ const ConversationBox = ({
     if (conversationRef.current) {
       conversationRef.current.scrollTop = conversationRef.current.scrollHeight;
     }
-  }, [history]);
+  }, [history, isGeneratingResponse]);
 
   const handlePromptChange = (e) => {
     if (mode === 'continuous') {
@@ -82,7 +83,7 @@ const ConversationBox = ({
             checked={isGlobalHotkeyEnabled}
             onChange={handleGlobalHotkeyToggle}
           />
-          <span dangerouslySetInnerHTML={{ __html: '<b>`</b> Hotkey' }} />
+          <span dangerouslySetInnerHTML={{ __html: 'Activate Bounding Box Mode Hotkey <b>`</b>' }} />
         </label>
       </div>
       <div
@@ -95,32 +96,57 @@ const ConversationBox = ({
           overflowY: 'auto',
           borderRadius: '5px',
           boxShadow: '0 2px 5px rgba(0,0,0,0.1)',
-          width: '100%', // Ensure it takes full width
+          width: '100%',
         }}
       >
-        {history.length === 0 ? (
+        {history.length === 0 && !isGeneratingResponse ? (
           <div style={{ textAlign: 'center', color: '#666', padding: '20px' }}>
             Start a conversation...
           </div>
         ) : (
-          history.map((message, index) => (
-            <div
-              key={index}
-              style={{
-                margin: '10px 0',
-                padding: '10px',
-                backgroundColor: message.role === 'user' ? '#f1f3f5' : '#e9ecef',
-                borderRadius: '5px',
-                width: '70%', // 70% of container width
-                float: message.role === 'user' ? 'right' : 'left', // Float right for user, left for AI
-                textAlign: message.role === 'user' ? 'right' : 'left',
-                clear: 'both', // Prevent overlap with previous messages
-              }}
-            >
-              <strong>{message.role === 'user' ? 'You: ' : 'AI: '}</strong>
-              <span style={{ whiteSpace: 'pre-wrap' }}>{message.content}</span>
-            </div>
-          ))
+          <React.Fragment>
+            {history.map((message, index) => (
+              <div
+                key={index}
+                style={{
+                  margin: '10px 0',
+                  padding: '10px',
+                  backgroundColor: message.role === 'user' ? '#f1f3f5' : '#e9ecef',
+                  borderRadius: '5px',
+                  width: '70%',
+                  float: message.role === 'user' ? 'right' : 'left',
+                  textAlign: message.role === 'user' ? 'right' : 'left',
+                  clear: 'both',
+                }}
+              >
+                <strong>{message.role === 'user' ? 'You: ' : 'AI: '}</strong>
+                <span style={{ whiteSpace: 'pre-wrap' }}>{message.content}</span>
+              </div>
+            ))}
+            {isGeneratingResponse && (
+              <div
+                style={{
+                  margin: '10px 0',
+                  padding: '10px',
+                  backgroundColor: '#e9ecef',
+                  borderRadius: '5px',
+                  width: '70%',
+                  float: 'left',
+                  textAlign: 'left',
+                  clear: 'both',
+                }}
+              >
+                <strong>AI: </strong>
+                <span className="loading-dots">
+                  <span>.</span>
+                  <span>.</span>
+                  <span>.</span>
+                  <span>.</span>
+                  <span>.</span>
+                </span>
+              </div>
+            )}
+          </React.Fragment>
         )}
       </div>
       <form onSubmit={handleSubmit} style={{ marginTop: '10px' }}>
@@ -161,6 +187,28 @@ const ConversationBox = ({
           </button>
         )}
       </form>
+
+      {/* Inline CSS for the loading animation */}
+      <style>{`
+        .loading-dots {
+          display: inline-block;
+          font-size: 16px;
+          letter-spacing: 2px;
+        }
+        .loading-dots span {
+          animation: bounce 1s infinite;
+          display: inline-block;
+        }
+        .loading-dots span:nth-child(1) { animation-delay: 0s; }
+        .loading-dots span:nth-child(2) { animation-delay: 0.2s; }
+        .loading-dots span:nth-child(3) { animation-delay: 0.4s; }
+        .loading-dots span:nth-child(4) { animation-delay: 0.6s; }
+        .loading-dots span:nth-child(5) { animation-delay: 0.8s; }
+        @keyframes bounce {
+          0%, 100% { transform: translateY(0); }
+          50% { transform: translateY(-5px); }
+        }
+      `}</style>
     </div>
   );
 };
