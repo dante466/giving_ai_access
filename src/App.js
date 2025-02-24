@@ -1,12 +1,16 @@
+// BEGIN App.js
 import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
 import VideoStream from './VideoStream';
 import PromptInput from './PromptInput';
 import ConversationBox from './ConversationBox';
 import useMemory from './memoryManager';
+import JSONPretty from 'react-json-pretty';
+import 'react-json-pretty/themes/monikai.css';
 
 function App() {
   const [conversationHistory, setConversationHistory] = useState([]);
+  const [fullConversationData, setFullConversationData] = useState([]);
   const [latestFrame, setLatestFrame] = useState(null);
   const [boundingBoxFrame, setBoundingBoxFrame] = useState(null);
   const [openAiApiKey, setOpenAiApiKey] = useState('');
@@ -22,6 +26,10 @@ function App() {
   const [croppedFrame, setCroppedFrame] = useState(null);
   const [isLightboxOpen, setIsLightboxOpen] = useState(false);
   const [isGlobalHotkeyEnabled, setIsGlobalHotkeyEnabled] = useState(true);
+  const [isFileExplorerOpen, setIsFileExplorerOpen] = useState(false);
+  const [uploadedFiles, setUploadedFiles] = useState([]);
+  const [isJsonViewerOpen, setIsJsonViewerOpen] = useState(false);
+  const [isVideoFeedEnabled, setIsVideoFeedEnabled] = useState(true);
   const { saveMemory, getRelevantMemories } = useMemory();
   const continuousInterval = useRef(null);
   const promptInputRef = useRef(null);
@@ -71,6 +79,7 @@ function App() {
     });
 
     window.electronAPI.on('capture-error', (err) => {
+      console.log('Capture error:', err);
       setConversationHistory(prev => [...prev, { role: 'assistant', content: `Capture error: ${err}` }]);
     });
 
@@ -143,7 +152,7 @@ function App() {
         setBoundingBox({ x: adjustedX, y: adjustedY, width, height });
         console.log('Bounding box set:', { x: adjustedX, y: adjustedY, width, height });
         setBoundingBoxFrame(dataUrl);
-        console.log('Preview should display with boundingBoxFrame:', dataUrl.substring(0, 50) + '...');
+        console.log('BoundingBoxFrame updated:', dataUrl.substring(0, 50) + '...');
 
         if (mode === 'on-demand') {
           stream.getTracks().forEach(track => track.stop());
@@ -220,19 +229,71 @@ function App() {
     img.src = frame;
   };
 
+  const handleFileUpload = (event) => {
+    const files = Array.from(event.target.files);
+    const existingFileNames = new Set(uploadedFiles.map(file => file.name));
+    const newFiles = files.filter(file => !existingFileNames.has(file.name));
+
+    const filePromises = newFiles.map(file => 
+      new Promise((resolve) => {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          const content = e.target.result;
+          const wordCount = content.split(/\s+/).length;
+          const messageId = Date.now() + Math.random().toString(36).substr(2, 9);
+          resolve({ name: file.name, content, tokenCount: wordCount, messageId });
+        };
+        reader.readAsText(file);
+      })
+    );
+
+    Promise.all(filePromises).then(fileData => {
+      if (fileData.length > 0) {
+        setUploadedFiles(prev => [...prev, ...fileData]);
+        const fileMessages = fileData.map(file => ({
+          role: 'system',
+          content: `File Uploaded: ${file.name}\nContent: ${file.content}`,
+          id: file.messageId,
+        }));
+        setConversationHistory(prev => [...prev, ...fileMessages]);
+        console.log('Uploaded files added to history:', fileData);
+      } else {
+        console.log('No new files added; duplicates ignored.');
+      }
+    });
+  };
+
+  const handleFileDelete = (fileName) => {
+    const fileToDelete = uploadedFiles.find(file => file.name === fileName);
+    if (!fileToDelete) return;
+
+    const messageId = fileToDelete.messageId;
+    setUploadedFiles(prev => prev.filter(file => file.name !== fileName));
+    setConversationHistory(prev => {
+      const updatedHistory = prev.filter(msg => msg.id !== messageId);
+      console.log(`Deleted file message with ID ${messageId} from conversation history: ${fileName}`);
+      return updatedHistory;
+    });
+    setFullConversationData(prev => prev.map(entry => ({
+      ...entry,
+      conversationHistory: entry.conversationHistory.filter(msg => msg.id !== messageId),
+    })));
+    console.log(`Deleted file with message ID ${messageId} from full conversation data: ${fileName}`);
+  };
+
   const handlePrompt = async (systemPrompt, userPrompt, promptMode) => {
-    let frameToSend = boundingBoxFrame || croppedFrame || latestFrame;
+    let frameToSend = isVideoFeedEnabled ? (boundingBoxFrame || croppedFrame || latestFrame) : null;
     let usedFullFrame = false;
 
-    if (!frameToSend) {
-      setConversationHistory([...conversationHistory, { role: 'assistant', content: 'No frame available yet. Please ensure a video source is selected.' }]);
+    if (!frameToSend && uploadedFiles.length === 0) {
+      setConversationHistory([...conversationHistory, { role: 'assistant', content: 'No frame or files available. Please select a video source or upload files.' }]);
       return;
     }
 
-    if (!boundingBoxFrame && !croppedFrame && latestFrame) {
+    if (isVideoFeedEnabled && !boundingBoxFrame && !croppedFrame && latestFrame) {
       frameToSend = latestFrame;
       usedFullFrame = true;
-      console.log('No bounding box set; defaulting to full video input:', frameToSend.substring(0, 50) + '...');
+      console.log('No bounding box set; defaulting to full video input:', frameToSend?.substring(0, 50) + '...');
     }
 
     const apiKey = selectedModel === 'gpt-4o' ? openAiApiKey : anthropicApiKey;
@@ -241,32 +302,44 @@ function App() {
       return;
     }
 
-    // Add user message immediately and set loading state
-    setConversationHistory([...conversationHistory, { role: 'user', content: userPrompt }]);
+    setConversationHistory(prev => [...prev, { role: 'user', content: userPrompt }]);
     setIsGeneratingResponse(true);
     setIsRequestPending(true);
-    console.log('Request pending set to true, using frame:', frameToSend.substring(0, 50) + '...');
+
     const relevantMemories = getRelevantMemories(userPrompt);
+    console.log('Request pending set to true, using frame:', frameToSend?.substring(0, 50) + '...');
+
+    const fullData = {
+      systemPrompt,
+      conversationHistory: [...conversationHistory, { role: 'user', content: userPrompt }],
+      memories: relevantMemories,
+      userPrompt,
+      frame: frameToSend ? frameToSend.substring(0, 50) + '...' : null,
+      usedFullFrame,
+    };
+
+    const messages = [
+      { role: 'system', content: systemPrompt },
+      ...conversationHistory,
+      {
+        role: 'user',
+        content: frameToSend ? [
+          { type: 'text', text: `Memories: ${JSON.stringify(relevantMemories)}\n${userPrompt}${usedFullFrame ? '\n(Note: Using full video input as no bounding box is set)' : ''}` },
+          { type: 'image_url', image_url: { url: frameToSend } },
+        ] : [
+          { type: 'text', text: `Memories: ${JSON.stringify(relevantMemories)}\n${userPrompt}` },
+        ],
+      },
+    ];
+    const totalLength = JSON.stringify(messages).length;
+    console.log('Sending to OpenAI:', { messages, totalLength });
 
     try {
       let res;
       if (selectedModel === 'gpt-4o') {
         res = await axios.post(
           'https://api.openai.com/v1/chat/completions',
-          {
-            model: 'gpt-4o',
-            messages: [
-              { role: 'system', content: systemPrompt },
-              ...conversationHistory,
-              {
-                role: 'user',
-                content: [
-                  { type: 'text', text: `Memories: ${JSON.stringify(relevantMemories)}\nUser Prompt: ${userPrompt}${usedFullFrame ? '\n(Note: Using full video input as no bounding box is set)' : ''}` },
-                  { type: 'image_url', image_url: { url: frameToSend } },
-                ],
-              },
-            ],
-          },
+          { model: 'gpt-4o', messages },
           { headers: { Authorization: `Bearer ${openAiApiKey}` } }
         );
       } else {
@@ -278,9 +351,11 @@ function App() {
             messages: [
               {
                 role: 'user',
-                content: [
-                  { type: 'text', text: `${systemPrompt}\nMemories: ${JSON.stringify(relevantMemories)}\nUser Prompt: ${userPrompt}${usedFullFrame ? '\n(Note: Using full video input as no bounding box is set)' : ''}` },
+                content: frameToSend ? [
+                  { type: 'text', text: `${systemPrompt}\nMemories: ${JSON.stringify(relevantMemories)}\n${userPrompt}${usedFullFrame ? '\n(Note: Using full video input as no bounding box is set)' : ''}` },
                   { type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: frameToSend.split(',')[1] } },
+                ] : [
+                  { type: 'text', text: `${systemPrompt}\nMemories: ${JSON.stringify(relevantMemories)}\n${userPrompt}` },
                 ],
               },
             ],
@@ -297,10 +372,10 @@ function App() {
 
       const llmResponse = selectedModel === 'gpt-4o' ? res.data.choices[0].message.content : res.data.content[0].text;
       console.log('LLM response:', llmResponse);
-      setConversationHistory(prev => [
-        ...prev,
-        { role: 'assistant', content: llmResponse },
-      ]);
+      
+      setConversationHistory(prev => [...prev, { role: 'assistant', content: llmResponse }]);
+      setFullConversationData(prev => [...prev, { ...fullData, response: llmResponse }]);
+
       if (llmResponse.toLowerCase().includes('advice')) {
         saveMemory({ description: userPrompt, response: llmResponse });
       }
@@ -308,7 +383,9 @@ function App() {
         window.speechSynthesis.speak(new SpeechSynthesisUtterance(llmResponse));
       }
     } catch (error) {
+      console.error('API Error:', error.response?.data || error.message);
       setConversationHistory(prev => [...prev, { role: 'assistant', content: `Error: ${error.response?.data?.error?.message || error.message}` }]);
+      setFullConversationData(prev => [...prev, { ...fullData, response: `Error: ${error.response?.data?.error?.message || error.message}` }]);
     } finally {
       setIsGeneratingResponse(false);
       setIsRequestPending(false);
@@ -357,6 +434,12 @@ function App() {
     window.electronAPI.send('toggle-global-hotkey', enabled);
   };
 
+  const handleVideoFeedToggle = (e) => {
+    const enabled = e.target.checked;
+    setIsVideoFeedEnabled(enabled);
+    console.log('Video feed enabled:', enabled);
+  };
+
   const getPromptInputValue = () => promptInputRef.current?.value || 'You are an AI assistant viewing a desktop area. Make observations or answer queries based on the captured frame.';
 
   const openLightbox = () => {
@@ -380,13 +463,23 @@ function App() {
   }
 
   return (
-    <div style={{ padding: '20px', fontFamily: 'Arial', maxWidth: '1000px', margin: '0 auto', display: 'flex', flexDirection: 'column', height: '100vh' }}>
+    <div style={{ padding: '20px', fontFamily: 'Arial', maxWidth: '1000px', margin: '0 auto' }}>
       <h1 style={{ fontSize: '24px', marginBottom: '20px' }}>
         Desktop AI Assistant {isBoundingBoxMode ? '(Bounding Box Mode)' : ''}
       </h1>
-      <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
-        <div style={{ marginRight: '20px', width: '300px', flexShrink: 0 }}>
-          <h3 style={{ fontSize: '16px', marginBottom: '5px' }}>Video Feed:</h3>
+      <div style={{ display: 'flex', height: '60vh', marginBottom: '20px' }}>
+        <div style={{ marginRight: '20px', width: '300px', flexShrink: '0' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '5px' }}>
+            <h3 style={{ fontSize: '16px', margin: 0 }}>Video Feed:</h3>
+            <label style={{ fontSize: '14px' }}>
+              <input
+                type="checkbox"
+                checked={isVideoFeedEnabled}
+                onChange={handleVideoFeedToggle}
+              />
+              Enable
+            </label>
+          </div>
           <VideoStream 
             onFrame={handleFrame} 
             isBoundingBoxMode={isBoundingBoxMode} 
@@ -397,6 +490,7 @@ function App() {
             }} 
           />
           {boundingBoxFrame && (
+            console.log('Rendering bounding box preview:', boundingBoxFrame.substring(0, 50) + '...'),
             <div style={{ marginTop: '20px' }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                 <h3 style={{ fontSize: '16px', marginBottom: '5px' }}>Bounding Box Preview:</h3>
@@ -425,22 +519,143 @@ function App() {
             </div>
           )}
         </div>
-        <ConversationBox 
-          history={conversationHistory}
-          mode={mode}
-          setMode={setMode}
-          onPromptSubmit={handlePromptSubmit}
-          continuousPrompt={continuousPrompt}
-          setContinuousPrompt={setContinuousPrompt}
-          onDemandPrompt={onDemandPrompt}
-          setOnDemandPrompt={setOnDemandPrompt}
-          isRequestPending={isRequestPending}
-          isGeneratingResponse={isGeneratingResponse}
-          isGlobalHotkeyEnabled={isGlobalHotkeyEnabled}
-          handleGlobalHotkeyToggle={handleGlobalHotkeyToggle}
-        />
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+          <ConversationBox 
+            history={conversationHistory}
+            mode={mode}
+            setMode={setMode}
+            onPromptSubmit={handlePromptSubmit}
+            continuousPrompt={continuousPrompt}
+            setContinuousPrompt={setContinuousPrompt}
+            onDemandPrompt={onDemandPrompt}
+            setOnDemandPrompt={setOnDemandPrompt}
+            isRequestPending={isRequestPending}
+            isGeneratingResponse={isGeneratingResponse}
+            isGlobalHotkeyEnabled={isGlobalHotkeyEnabled}
+            handleGlobalHotkeyToggle={handleGlobalHotkeyToggle}
+          />
+          <PromptInput onSubmit={(systemPrompt) => handlePrompt(mode === 'continuous' ? continuousPrompt : onDemandPrompt, 'manual')} ref={promptInputRef} />
+        </div>
       </div>
-      <div style={{ marginTop: '20px' }}>
+
+      {/* File Access Tool */}
+      <div style={{ marginBottom: '20px', border: '1px solid #ccc', borderRadius: '5px' }}>
+        <div 
+          style={{ 
+            padding: '10px', 
+            backgroundColor: '#f0f0f0', 
+            cursor: 'pointer', 
+            display: 'flex', 
+            justifyContent: 'space-between', 
+            alignItems: 'center' 
+          }} 
+          onClick={() => setIsFileExplorerOpen(!isFileExplorerOpen)}
+        >
+          <h3 style={{ fontSize: '16px', margin: '0' }}>File Access Tool</h3>
+          <span>{isFileExplorerOpen ? '▲' : '▼'}</span>
+        </div>
+        {isFileExplorerOpen && (
+          <div 
+            style={{ 
+              padding: '10px', 
+              backgroundColor: '#fff', 
+              borderTop: '1px solid #ccc' 
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', marginBottom: '10px' }}>
+              <input 
+                type="file" 
+                multiple 
+                onChange={handleFileUpload} 
+                style={{ marginRight: '10px' }} 
+              />
+              <span>{uploadedFiles.length} Files Selected</span>
+            </div>
+            {uploadedFiles.length === 0 ? (
+              <p>No files uploaded yet.</p>
+            ) : (
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px' }}>
+                {uploadedFiles.map((file, index) => (
+                  <div key={index} style={{ textAlign: 'center', width: '80px', position: 'relative' }}>
+                    <div style={{ 
+                      width: '50px', 
+                      height: '50px', 
+                      backgroundColor: '#ddd', 
+                      display: 'flex', 
+                      alignItems: 'center', 
+                      justifyContent: 'center', 
+                      borderRadius: '5px', 
+                      margin: '0 auto' 
+                    }}>
+                      📄
+                    </div>
+                    <button
+                      onClick={() => handleFileDelete(file.name)}
+                      style={{
+                        position: 'absolute',
+                        top: '-5px',
+                        right: '10px',
+                        width: '20px',
+                        height: '20px',
+                        backgroundColor: '#ff4444',
+                        color: '#fff',
+                        border: 'none',
+                        borderRadius: '50%',
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        fontSize: '12px',
+                        lineHeight: '20px',
+                      }}
+                      title={`Remove ${file.name}`}
+                    >
+                      -
+                    </button>
+                    <p style={{ fontSize: '12px', margin: '5px 0 0 0', wordBreak: 'break-word' }}>{file.name}</p>
+                    <p style={{ fontSize: '10px', color: '#666', margin: '0' }}>{file.tokenCount} tokens</p>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* Full Conversation in JSON Tool */}
+      <div style={{ marginBottom: '20px', border: '1px solid #ccc', borderRadius: '5px' }}>
+        <div 
+          style={{ 
+            padding: '10px', 
+            backgroundColor: '#f0f0f0', 
+            cursor: 'pointer', 
+            display: 'flex', 
+            justifyContent: 'space-between', 
+            alignItems: 'center' 
+          }} 
+          onClick={() => setIsJsonViewerOpen(!isJsonViewerOpen)}
+        >
+          <h3 style={{ fontSize: '16px', margin: '0' }}>Full Conversation in JSON</h3>
+          <span>{isJsonViewerOpen ? '▲' : '▼'}</span>
+        </div>
+        {isJsonViewerOpen && (
+          <div 
+            style={{ 
+              padding: '10px', 
+              backgroundColor: '#fff', 
+              borderTop: '1px solid #ccc' 
+            }}
+          >
+            <JSONPretty 
+              data={fullConversationData} 
+              theme="monikai" 
+              style={{ fontSize: '12px' }}
+            />
+          </div>
+        )}
+      </div>
+
+      <div style={{ marginBottom: '20px' }}>
         <label style={{ display: 'block', marginBottom: '5px' }}>Select Model:</label>
         <select
           value={selectedModel}
@@ -452,7 +667,7 @@ function App() {
           <option value="claude-opus">Claude Opus</option>
         </select>
       </div>
-      <div style={{ marginTop: '10px' }}>
+      <div style={{ marginBottom: '20px' }}>
         <label style={{ display: 'block', marginBottom: '5px' }}>OpenAI API Key:</label>
         <input 
           value={openAiApiKey} 
@@ -461,7 +676,7 @@ function App() {
           style={{ width: '100%', padding: '8px', borderRadius: '5px', border: '1px solid #ccc' }} 
         />
       </div>
-      <div style={{ marginTop: '10px' }}>
+      <div style={{ marginBottom: '20px' }}>
         <label style={{ display: 'block', marginBottom: '5px' }}>Anthropic API Key:</label>
         <input 
           value={anthropicApiKey} 
@@ -470,13 +685,12 @@ function App() {
           style={{ width: '100%', padding: '8px', borderRadius: '5px', border: '1px solid #ccc' }} 
         />
       </div>
-      <div style={{ marginTop: '10px' }}>
+      <div style={{ marginBottom: '20px' }}>
         <label>
           <input type="checkbox" checked={isVoiceEnabled} onChange={(e) => setIsVoiceEnabled(e.target.checked)} /> 
           Enable Voice
         </label>
       </div>
-      <PromptInput onSubmit={(systemPrompt) => handlePrompt(mode === 'continuous' ? continuousPrompt : onDemandPrompt, 'manual')} ref={promptInputRef} />
 
       {isLightboxOpen && (
         <div
@@ -522,3 +736,4 @@ function App() {
 }
 
 export default App;
+// END App.js
