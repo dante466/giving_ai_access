@@ -1,4 +1,3 @@
-// BEGIN Main.js
 const { app, BrowserWindow, ipcMain, desktopCapturer, screen, globalShortcut } = require('electron');
 const fs = require('fs');
 const path = require('path');
@@ -10,13 +9,47 @@ let overlayWindow;
 let overlayPosition;
 let isGlobalHotkeyEnabled = false;
 
+// Path to store window bounds
+const configPath = path.join(app.getPath('userData'), 'window-bounds.json');
+
+function saveWindowBounds(bounds) {
+  try {
+    fs.writeFileSync(configPath, JSON.stringify(bounds));
+    console.log('Window bounds saved:', bounds);
+  } catch (err) {
+    console.error('Failed to save window bounds:', err);
+  }
+}
+
+function loadWindowBounds() {
+  try {
+    if (fs.existsSync(configPath)) {
+      const data = fs.readFileSync(configPath, 'utf8');
+      const bounds = JSON.parse(data);
+      console.log('Loaded window bounds:', bounds);
+      return bounds;
+    }
+    console.log('No saved window bounds found, using default.');
+    return null;
+  } catch (err) {
+    console.error('Failed to load window bounds:', err);
+    return null;
+  }
+}
+
 function createMainWindow() {
   const preloadPath = path.join(__dirname, 'preload.js');
   console.log('Preload path resolved:', preloadPath);
 
+  const defaultBounds = { width: 800, height: 600, x: undefined, y: undefined };
+  const savedBounds = loadWindowBounds();
+  const bounds = savedBounds ? savedBounds : defaultBounds;
+
   mainWindow = new BrowserWindow({
-    width: 800,
-    height: 600, 
+    width: bounds.width,
+    height: bounds.height,
+    x: bounds.x, // Will center if undefined
+    y: bounds.y, // Will center if undefined
     webPreferences: {
       preload: preloadPath,
       nodeIntegration: false,
@@ -39,6 +72,15 @@ function createMainWindow() {
       overlayWindow = null;
     }
     mainWindow.webContents.send('reset-state');
+  });
+
+  // Save bounds when window is resized or moved
+  mainWindow.on('resize', () => {
+    saveWindowBounds(mainWindow.getBounds());
+  });
+
+  mainWindow.on('move', () => {
+    saveWindowBounds(mainWindow.getBounds());
   });
 
   mainWindow.on('closed', () => {
@@ -258,4 +300,3 @@ ipcMain.on('toggle-global-hotkey', (event, enable) => {
     console.log('Global hotkey ` unregistered');
   }
 });
-// END Main.js
