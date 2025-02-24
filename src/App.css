@@ -1,40 +1,104 @@
-/* BEGIN App.css */
-.App {
-  text-align: center;
+.app-container {
+  padding: 20px;
+  font-family: Arial, sans-serif;
+  max-width: 1000px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column; /* Stack children vertically */
+  min-height: 100vh; /* Ensure it takes full height for proper scrolling */
 }
 
-.App-logo {
-  height: 40vmin;
-  pointer-events: none;
+.app-header {
+  font-size: 24px;
+  margin-bottom: 20px;
 }
 
-@media (prefers-reduced-motion: no-preference) {
-  .App-logo {
-    animation: App-logo-spin infinite 20s linear;
-  }
+.app-content {
+  display: flex;
+  margin-bottom: 20px;
+  flex-grow: 0; /* Prevent it from expanding beyond content */
 }
 
-.App-header {
-  background-color: #282c34;
-  min-height: 100vh;
+.video-section {
+  margin-right: 20px;
+  width: 300px;
+  flex-shrink: 0;
+}
+
+.video-feed-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 5px;
+}
+
+.video-feed-title {
+  font-size: 16px;
+  margin: 0;
+}
+
+.conversation-section {
+  flex: 1;
   display: flex;
   flex-direction: column;
-  align-items: center; 
+}
+
+.app-bottom {
+  flex-grow: 0; /* Allow it to take only the space it needs */
+}
+
+.api-section {
+  margin-bottom: 20px;
+}
+
+.api-label {
+  display: block;
+  margin-bottom: 5px;
+}
+
+.api-input,
+.model-select {
+  width: 100%;
+  padding: 8px;
+  border-radius: 5px;
+  border: 1px solid #ccc;
+}
+
+.voice-toggle {
+  margin-bottom: 20px;
+}
+
+.lightbox {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(0, 0, 0, 0.8);
+  display: flex;
   justify-content: center;
-  font-size: calc(10px + 2vmin);
-  color: white;
+  align-items: center;
+  z-index: 1000;
 }
 
-.App-link {
-  color: #61dafb;
+.lightbox-image {
+  max-width: 90%;
+  max-height: 90%;
+  object-fit: contain;
 }
 
-@keyframes App-logo-spin {
-  from {
-    transform: rotate(0deg);
-  }
-  to {
-    transform: rotate(360deg);
-  }
+.lightbox-close {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  padding: 5px 10px;
+  background-color: #fff;
+  border: none;
+  cursor: pointer;
+  font-size: 16px;
 }
-/* END App.css */
+
+.loading-screen {
+  text-align: center;
+  padding: 20px;
+}

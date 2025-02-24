@@ -1,0 +1,162 @@
+.conversation-container {
+    margin-bottom: 20px;
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    width: 100%;
+  }
+  
+  .mode-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+  }
+  
+  .mode-buttons {
+    display: flex;
+    gap: 10px;
+  }
+  
+  .mode-label {
+    font-size: 14px;
+    font-weight: bold;
+  }
+  
+  .mode-button {
+    padding: 5px 10px;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 14px;
+  }
+  
+  .mode-button-on-demand {
+    background-color: #e9ecef;
+    color: #000;
+  }
+  
+  .mode-button-on-demand.active {
+    background-color: #007bff;
+    color: #fff;
+  }
+  
+  .mode-button-continuous {
+    background-color: #e9ecef;
+    color: #000;
+    text-decoration: line-through;
+  }
+  
+  .mode-button-continuous.active {
+    background-color: #007bff;
+    color: #fff;
+  }
+  
+  .hotkey-toggle {
+    font-size: 14px;
+  }
+  
+  .conversation-box {
+    border: 1px solid #ccc;
+    padding: 10px;
+    background-color: #fff;
+    overflow-y: auto; /* Enable vertical scrolling */
+    border-radius: 5px;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+    width: 100%;
+    max-height: 50vh; /* Limit to 50% of viewport height */
+  }
+  
+  .empty-conversation {
+    text-align: center;
+    color: #666;
+    padding: 20px;
+  }
+  
+  .message {
+    margin: 10px 0;
+    padding: 10px;
+    border-radius: 5px;
+    width: 70%;
+  }
+  
+  .message-user {
+    background-color: #f1f3f5;
+    float: right;
+    text-align: right;
+  }
+  
+  .message-ai {
+    background-color: #e9ecef;
+    float: left;
+    text-align: left;
+  }
+  
+  .message strong {
+    margin-right: 5px;
+  }
+  
+  .message span {
+    white-space: pre-wrap;
+  }
+  
+  .loading-message {
+    margin: 10px 0;
+    padding: 10px;
+    background-color: #e9ecef;
+    border-radius: 5px;
+    width: 70%;
+    float: left;
+    text-align: left;
+    clear: both;
+  }
+  
+  .prompt-form {
+    margin-top: 10px;
+  }
+  
+  .prompt-input {
+    width: 100%;
+    padding: 10px;
+    font-size: 16px;
+    border: 1px solid #ccc;
+    border-radius: 5px;
+    box-shadow: inset 0 1px 3px rgba(0,0,0,0.1);
+    box-sizing: border-box;
+    height: 40px;
+    overflow-x: auto;
+    white-space: nowrap;
+  }
+  
+  .submit-button {
+    margin-top: 10px;
+    padding: 8px 16px;
+    background-color: #007bff;
+    color: #fff;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 14px;
+  }
+  
+  .loading-dots {
+    display: inline-block;
+    font-size: 16px;
+    letter-spacing: 2px;
+  }
+  
+  .loading-dots span {
+    animation: bounce 1s infinite;
+    display: inline-block;
+  }
+  
+  .loading-dots span:nth-child(1) { animation-delay: 0s; }
+  .loading-dots span:nth-child(2) { animation-delay: 0.1s; }
+  .loading-dots span:nth-child(3) { animation-delay: 0.3s; }
+  .loading-dots span:nth-child(4) { animation-delay: 0.5s; }
+  .loading-dots span:nth-child(5) { animation-delay: 0.8s; }
+  
+  @keyframes bounce {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-5px); }
+  }

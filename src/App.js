@@ -1,4 +1,3 @@
-// BEGIN App.js
 import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
 import VideoStream from './VideoStream';
@@ -7,6 +6,9 @@ import ConversationBox from './ConversationBox';
 import useMemory from './memoryManager';
 import JSONPretty from 'react-json-pretty';
 import 'react-json-pretty/themes/monikai.css';
+import './App.css';
+import './FileExplorer.css';
+import './JsonViewer.css';
 
 function App() {
   const [conversationHistory, setConversationHistory] = useState([]);
@@ -285,10 +287,11 @@ function App() {
     let frameToSend = isVideoFeedEnabled ? (boundingBoxFrame || croppedFrame || latestFrame) : null;
     let usedFullFrame = false;
 
-    if (!frameToSend && uploadedFiles.length === 0) {
-      setConversationHistory([...conversationHistory, { role: 'assistant', content: 'No frame or files available. Please select a video source or upload files.' }]);
-      return;
-    }
+    // Removed the check that forces a frame or file upload
+    // if (!frameToSend && uploadedFiles.length === 0) {
+    //   setConversationHistory([...conversationHistory, { role: 'assistant', content: 'No frame or files available. Please select a video source or upload files.' }]);
+    //   return;
+    // }
 
     if (isVideoFeedEnabled && !boundingBoxFrame && !croppedFrame && latestFrame) {
       frameToSend = latestFrame;
@@ -459,19 +462,19 @@ function App() {
   };
 
   if (isLoadingScreenSize) {
-    return <div>Loading screen size...</div>;
+    return <div className="loading-screen">Loading screen size...</div>;
   }
 
   return (
-    <div style={{ padding: '20px', fontFamily: 'Arial', maxWidth: '1000px', margin: '0 auto' }}>
-      <h1 style={{ fontSize: '24px', marginBottom: '20px' }}>
+    <div className="app-container">
+      <h1 className="app-header">
         Desktop AI Assistant {isBoundingBoxMode ? '(Bounding Box Mode)' : ''}
       </h1>
-      <div style={{ display: 'flex', height: '60vh', marginBottom: '20px' }}>
-        <div style={{ marginRight: '20px', width: '300px', flexShrink: '0' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '5px' }}>
-            <h3 style={{ fontSize: '16px', margin: 0 }}>Video Feed:</h3>
-            <label style={{ fontSize: '14px' }}>
+      <div className="app-content">
+        <div className="video-section">
+          <div className="video-feed-header">
+            <h3 className="video-feed-title">Video Feed:</h3>
+            <label>
               <input
                 type="checkbox"
                 checked={isVideoFeedEnabled}
@@ -490,21 +493,12 @@ function App() {
             }} 
           />
           {boundingBoxFrame && (
-            console.log('Rendering bounding box preview:', boundingBoxFrame.substring(0, 50) + '...'),
-            <div style={{ marginTop: '20px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <h3 style={{ fontSize: '16px', marginBottom: '5px' }}>Bounding Box Preview:</h3>
+            <div className="preview-container">
+              <div className="preview-header">
+                <h3 className="preview-title">Bounding Box Preview:</h3>
                 <button
                   onClick={clearBoundingBoxPreview}
-                  style={{
-                    fontSize: '16px',
-                    padding: '2px 8px',
-                    backgroundColor: '#ff4444',
-                    color: '#fff',
-                    border: 'none',
-                    borderRadius: '3px',
-                    cursor: 'pointer',
-                  }}
+                  className="clear-button"
                   title="Clear Bounding Box Preview"
                 >
                   X
@@ -513,13 +507,13 @@ function App() {
               <img
                 src={boundingBoxFrame}
                 alt="Bounding Box Preview"
-                style={{ width: '100%', border: '2px solid #333', objectFit: 'contain', cursor: 'pointer' }}
+                className="preview-image"
                 onClick={openLightbox}
               />
             </div>
           )}
         </div>
-        <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+        <div className="conversation-section">
           <ConversationBox 
             history={conversationHistory}
             mode={mode}
@@ -538,194 +532,120 @@ function App() {
         </div>
       </div>
 
-      {/* File Access Tool */}
-      <div style={{ marginBottom: '20px', border: '1px solid #ccc', borderRadius: '5px' }}>
-        <div 
-          style={{ 
-            padding: '10px', 
-            backgroundColor: '#f0f0f0', 
-            cursor: 'pointer', 
-            display: 'flex', 
-            justifyContent: 'space-between', 
-            alignItems: 'center' 
-          }} 
-          onClick={() => setIsFileExplorerOpen(!isFileExplorerOpen)}
-        >
-          <h3 style={{ fontSize: '16px', margin: '0' }}>File Access Tool</h3>
-          <span>{isFileExplorerOpen ? '▲' : '▼'}</span>
-        </div>
-        {isFileExplorerOpen && (
+      {/* Bottom Section */}
+      <div className="app-bottom">
+        {/* File Access Tool */}
+        <div className="file-explorer-container">
           <div 
-            style={{ 
-              padding: '10px', 
-              backgroundColor: '#fff', 
-              borderTop: '1px solid #ccc' 
-            }}
+            className={`file-explorer-header ${isFileExplorerOpen ? 'open' : ''}`} 
+            onClick={() => setIsFileExplorerOpen(!isFileExplorerOpen)}
           >
-            <div style={{ display: 'flex', alignItems: 'center', marginBottom: '10px' }}>
-              <input 
-                type="file" 
-                multiple 
-                onChange={handleFileUpload} 
-                style={{ marginRight: '10px' }} 
-              />
-              <span>{uploadedFiles.length} Files Selected</span>
-            </div>
-            {uploadedFiles.length === 0 ? (
-              <p>No files uploaded yet.</p>
-            ) : (
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px' }}>
-                {uploadedFiles.map((file, index) => (
-                  <div key={index} style={{ textAlign: 'center', width: '80px', position: 'relative' }}>
-                    <div style={{ 
-                      width: '50px', 
-                      height: '50px', 
-                      backgroundColor: '#ddd', 
-                      display: 'flex', 
-                      alignItems: 'center', 
-                      justifyContent: 'center', 
-                      borderRadius: '5px', 
-                      margin: '0 auto' 
-                    }}>
-                      📄
-                    </div>
-                    <button
-                      onClick={() => handleFileDelete(file.name)}
-                      style={{
-                        position: 'absolute',
-                        top: '-5px',
-                        right: '10px',
-                        width: '20px',
-                        height: '20px',
-                        backgroundColor: '#ff4444',
-                        color: '#fff',
-                        border: 'none',
-                        borderRadius: '50%',
-                        cursor: 'pointer',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        fontSize: '12px',
-                        lineHeight: '20px',
-                      }}
-                      title={`Remove ${file.name}`}
-                    >
-                      -
-                    </button>
-                    <p style={{ fontSize: '12px', margin: '5px 0 0 0', wordBreak: 'break-word' }}>{file.name}</p>
-                    <p style={{ fontSize: '10px', color: '#666', margin: '0' }}>{file.tokenCount} tokens</p>
-                  </div>
-                ))}
+            <h3 className="file-explorer-title">File Access Tool</h3>
+            <span className="file-explorer-arrow">{isFileExplorerOpen ? '▲' : '▼'}</span>
+          </div>
+          {isFileExplorerOpen && (
+            <div className="file-explorer-content">
+              <div className="file-upload-section">
+                <input 
+                  type="file" 
+                  multiple 
+                  onChange={handleFileUpload} 
+                />
+                <span className="file-count">{uploadedFiles.length} Files Selected</span>
               </div>
-            )}
-          </div>
-        )}
-      </div>
-
-      {/* Full Conversation in JSON Tool */}
-      <div style={{ marginBottom: '20px', border: '1px solid #ccc', borderRadius: '5px' }}>
-        <div 
-          style={{ 
-            padding: '10px', 
-            backgroundColor: '#f0f0f0', 
-            cursor: 'pointer', 
-            display: 'flex', 
-            justifyContent: 'space-between', 
-            alignItems: 'center' 
-          }} 
-          onClick={() => setIsJsonViewerOpen(!isJsonViewerOpen)}
-        >
-          <h3 style={{ fontSize: '16px', margin: '0' }}>Full Conversation in JSON</h3>
-          <span>{isJsonViewerOpen ? '▲' : '▼'}</span>
+              {uploadedFiles.length === 0 ? (
+                <p className="no-files-message">No files uploaded yet.</p>
+              ) : (
+                <div className="file-list">
+                  {uploadedFiles.map((file, index) => (
+                    <div key={index} className="file-item">
+                      <div className="file-icon">📄</div>
+                      <button
+                        onClick={() => handleFileDelete(file.name)}
+                        className="delete-button"
+                        title={`Remove ${file.name}`}
+                      >
+                        -
+                      </button>
+                      <p className="file-name">{file.name}</p>
+                      <p className="file-token-count">{file.tokenCount} tokens</p>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
         </div>
-        {isJsonViewerOpen && (
-          <div 
-            style={{ 
-              padding: '10px', 
-              backgroundColor: '#fff', 
-              borderTop: '1px solid #ccc' 
-            }}
-          >
-            <JSONPretty 
-              data={fullConversationData} 
-              theme="monikai" 
-              style={{ fontSize: '12px' }}
-            />
-          </div>
-        )}
-      </div>
 
-      <div style={{ marginBottom: '20px' }}>
-        <label style={{ display: 'block', marginBottom: '5px' }}>Select Model:</label>
-        <select
-          value={selectedModel}
-          onChange={handleModelChange}
-          style={{ width: '100%', padding: '8px', borderRadius: '5px', border: '1px solid #ccc' }}
-        >
-          <option value="gpt-4o">OpenAI GPT-4o</option>
-          <option value="claude-sonnet">Claude Sonnet</option>
-          <option value="claude-opus">Claude Opus</option>
-        </select>
-      </div>
-      <div style={{ marginBottom: '20px' }}>
-        <label style={{ display: 'block', marginBottom: '5px' }}>OpenAI API Key:</label>
-        <input 
-          value={openAiApiKey} 
-          onChange={handleOpenAiApiKeyChange} 
-          placeholder="Enter your OpenAI API key" 
-          style={{ width: '100%', padding: '8px', borderRadius: '5px', border: '1px solid #ccc' }} 
-        />
-      </div>
-      <div style={{ marginBottom: '20px' }}>
-        <label style={{ display: 'block', marginBottom: '5px' }}>Anthropic API Key:</label>
-        <input 
-          value={anthropicApiKey} 
-          onChange={handleAnthropicApiKeyChange} 
-          placeholder="Enter your Anthropic API key" 
-          style={{ width: '100%', padding: '8px', borderRadius: '5px', border: '1px solid #ccc' }} 
-        />
-      </div>
-      <div style={{ marginBottom: '20px' }}>
-        <label>
-          <input type="checkbox" checked={isVoiceEnabled} onChange={(e) => setIsVoiceEnabled(e.target.checked)} /> 
-          Enable Voice
-        </label>
+        {/* Full Conversation in JSON Tool */}
+        <div className="json-viewer-container">
+          <div 
+            className={`json-viewer-header ${isJsonViewerOpen ? 'open' : ''}`} 
+            onClick={() => setIsJsonViewerOpen(!isJsonViewerOpen)}
+          >
+            <h3 className="json-viewer-title">Full Conversation in JSON</h3>
+            <span className="json-viewer-arrow">{isJsonViewerOpen ? '▲' : '▼'}</span>
+          </div>
+          {isJsonViewerOpen && (
+            <div className="json-viewer-content">
+              <JSONPretty 
+                data={fullConversationData} 
+                theme="monikai" 
+                className="json-viewer"
+              />
+            </div>
+          )}
+        </div>
+
+        <div className="api-section">
+          <label className="api-label">Select Model:</label>
+          <select
+            value={selectedModel}
+            onChange={handleModelChange}
+            className="model-select"
+          >
+            <option value="gpt-4o">OpenAI GPT-4o</option>
+            <option value="claude-sonnet">Claude Sonnet</option>
+            <option value="claude-opus">Claude Opus</option>
+          </select>
+        </div>
+        <div className="api-section">
+          <label className="api-label">OpenAI API Key:</label>
+          <input 
+            value={openAiApiKey} 
+            onChange={handleOpenAiApiKeyChange} 
+            placeholder="Enter your OpenAI API key" 
+            className="api-input"
+          />
+        </div>
+        <div className="api-section">
+          <label className="api-label">Anthropic API Key:</label>
+          <input 
+            value={anthropicApiKey} 
+            onChange={handleAnthropicApiKeyChange} 
+            placeholder="Enter your Anthropic API key" 
+            className="api-input"
+          />
+        </div>
+        <div className="voice-toggle">
+          <label>
+            <input type="checkbox" checked={isVoiceEnabled} onChange={(e) => setIsVoiceEnabled(e.target.checked)} /> 
+            Enable Voice
+          </label>
+        </div>
       </div>
 
       {isLightboxOpen && (
-        <div
-          style={{
-            position: 'fixed',
-            top: 0,
-            left: 0,
-            width: '100%', 
-            height: '100%',
-            backgroundColor: 'rgba(0, 0, 0, 0.8)',
-            display: 'flex',
-            justifyContent: 'center',
-            alignItems: 'center',
-            zIndex: 1000,
-          }}
-          onClick={closeLightbox}
-        >
+        <div className="lightbox" onClick={closeLightbox}>
           <img
             src={boundingBoxFrame}
             alt="Full-size Bounding Box"
-            style={{ maxWidth: '90%', maxHeight: '90%', objectFit: 'contain' }}
+            className="lightbox-image"
             onClick={(e) => e.stopPropagation()}
           />
           <button
             onClick={closeLightbox}
-            style={{
-              position: 'absolute',
-              top: '10px',
-              right: '10px',
-              padding: '5px 10px',
-              backgroundColor: '#fff',
-              border: 'none',
-              cursor: 'pointer',
-              fontSize: '16px',
-            }}
+            className="lightbox-close"
           >
             Close
           </button>
@@ -736,4 +656,3 @@ function App() {
 }
 
 export default App;
-// END App.js

@@ -1,0 +1,102 @@
+.file-explorer-container {
+    margin-bottom: 20px;
+    border: 1px solid #ccc;
+    border-radius: 5px;
+  }
+  
+  .file-explorer-header {
+    padding: 10px;
+    background-color: #f0f0f0;
+    cursor: pointer;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid #ccc; /* Add border for separation when closed */
+  }
+  
+  .file-explorer-header.open {
+    background-color: #e0e0e0; /* Slightly darker when open */
+    border-bottom: none; /* Remove bottom border when open */
+  }
+  
+  .file-explorer-title {
+    font-size: 16px;
+    margin: 0;
+  }
+  
+  .file-explorer-arrow {
+    font-size: 16px;
+  }
+  
+  .file-explorer-content {
+    padding: 10px;
+    background-color: #fff;
+    border-top: none; /* Ensure seamless transition from header */
+  }
+  
+  .file-upload-section {
+    display: flex;
+    align-items: center;
+    margin-bottom: 10px;
+  }
+  
+  .file-count {
+    margin-left: 10px;
+  }
+  
+  .no-files-message {
+    font-size: 14px;
+  }
+  
+  .file-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+  
+  .file-item {
+    text-align: center;
+    width: 80px;
+    position: relative;
+  }
+  
+  .file-icon {
+    width: 50px;
+    height: 50px;
+    background-color: #ddd;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 5px;
+    margin: 0 auto;
+  }
+  
+  .delete-button {
+    position: absolute;
+    top: -5px;
+    right: 10px;
+    width: 20px;
+    height: 20px;
+    background-color: #ff4444;
+    color: #fff;
+    border: none;
+    border-radius: 50%;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    line-height: 20px;
+  }
+  
+  .file-name {
+    font-size: 12px;
+    margin: 5px 0 0 0;
+    word-break: break-word;
+  }
+  
+  .file-token-count {
+    font-size: 10px;
+    color: #666;
+    margin: 0;
+  }

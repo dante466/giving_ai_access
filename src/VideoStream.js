@@ -1,5 +1,5 @@
-// BEGIN VideoStream.js
 import React, { useEffect, useRef, useState, useCallback, memo } from 'react';
+import './VideoStream.css';
 
 const VideoStream = memo(({ onFrame = () => {}, isBoundingBoxMode, onBoundingBoxDrawn }) => {
   const videoRef = useRef(null);
@@ -168,35 +168,18 @@ const VideoStream = memo(({ onFrame = () => {}, isBoundingBoxMode, onBoundingBox
   const aspectRatio = videoSize.width && videoSize.height ? videoSize.height / videoSize.width : 9 / 16;
   const videoHeight = videoWidth * aspectRatio;
 
-  const videoStyle = {
-    width: `${videoWidth}px`,
-    height: `${videoHeight}px`,
-    border: '2px solid #333',
-    display: stream ? 'block' : 'none',
-    objectFit: 'contain',
-  };
-
   const overlayStyle = dragBox && isBoundingBoxMode ? {
-    position: 'absolute',
     left: `${dragBox.x * videoWidth / (videoSize.width / 4)}px`,
     top: `${dragBox.y * videoHeight / (videoSize.height / 4)}px`,
     width: `${dragBox.width * videoWidth / (videoSize.width / 4)}px`,
     height: `${dragBox.height * videoHeight / (videoSize.height / 4)}px`,
-    border: '2px dashed red',
-    backgroundColor: 'rgba(255, 0, 0, 0.2)',
-    pointerEvents: 'none',
-  } : { display: 'none' };
+  } : {};
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
+    <div className="video-stream-container">
       <div
         ref={containerRef}
-        style={{
-          position: 'relative',
-          width: `${videoWidth}px`,
-          height: `${videoHeight}px`,
-          overflow: 'hidden',
-        }}
+        className="video-container"
         onMouseDown={handleMouseDown}
         onMouseMove={handleMouseMove}
         onMouseUp={handleMouseUp}
@@ -205,21 +188,22 @@ const VideoStream = memo(({ onFrame = () => {}, isBoundingBoxMode, onBoundingBox
           ref={videoRef}
           autoPlay
           muted
-          style={videoStyle}
+          className="video-element"
+          style={{ display: stream ? 'block' : 'none' }}
         /> 
-        <div style={overlayStyle}></div>
+        <div className="bounding-box-overlay" style={overlayStyle}></div>
       </div>
-      {error && <div style={{ color: 'red', marginTop: '10px', fontSize: '16px' }}>{error}</div>}
-      {!stream && !error && !isLoading && <div style={{ marginTop: '10px', fontSize: '16px' }}>Waiting for stream...</div>}
-      <div style={{ marginTop: '10px', width: `${videoWidth}px` }}>
-        <label htmlFor="source-select" style={{ display: 'block', fontSize: '16px', fontWeight: 'bold' }}>
+      {error && <div className="error-message">{error}</div>}
+      {!stream && !error && !isLoading && <div className="waiting-message">Waiting for stream...</div>}
+      <div className="source-select-container">
+        <label htmlFor="source-select" className="source-label">
           Select Video Stream:
         </label>
         <select
           id="source-select"
           value={selectedSource}
           onChange={handleSourceChange}
-          style={{ width: '100%', padding: '8px', marginTop: '5px', fontSize: '16px' }}
+          className="source-select"
           disabled={isLoading || error || sources.length === 0}
         >
           {isLoading && !error && (
@@ -240,4 +224,3 @@ const VideoStream = memo(({ onFrame = () => {}, isBoundingBoxMode, onBoundingBox
 });
 
 export default VideoStream;
-// END VideoStream.js

@@ -1,8 +1,8 @@
-// BEGIN PromptInput.js
 import React, { useState, useEffect, forwardRef, useImperativeHandle } from 'react';
+import './PromptInput.css';
 
 const PromptInput = forwardRef(({ onSubmit }, ref) => {
-  const defaultPrompt = 'You are an AI assistant that is viewing a video output stream of the user\'s selected window/application/etc. Make observations about what you see.';
+  const defaultPrompt = 'You are an AI assistant viewing a desktop area. Make observations or answer queries based on the captured frame.';
   
   const [prompt, setPrompt] = useState(() => {
     const savedPrompt = localStorage.getItem('system_prompt');
@@ -28,8 +28,8 @@ const PromptInput = forwardRef(({ onSubmit }, ref) => {
   };
 
   return (
-    <div style={{ marginTop: '20px' }}>
-      <label htmlFor="prompt-input" style={{ display: 'block', marginBottom: '5px', fontSize: '16px', fontWeight: 'bold' }}>
+    <div className="prompt-container">
+      <label htmlFor="prompt-input" className="prompt-label">
         System Prompt:
       </label>
       <input
@@ -38,12 +38,9 @@ const PromptInput = forwardRef(({ onSubmit }, ref) => {
         value={prompt}
         onChange={handleChange}
         placeholder="Set the AI's system prompt (e.g., 'Critique my gameplay')"
-        style={{ width: '1000px', padding: '8px', fontSize: '16px' }}
+        className="prompt-input"
       />
-      <button
-        onClick={handleSubmit}
-        style={{ marginTop: '10px', padding: '8px 16px', fontSize: '16px' }}
-      >
+      <button onClick={handleSubmit} className="submit-button">
         Submit
       </button>
     </div>
@@ -51,4 +48,3 @@ const PromptInput = forwardRef(({ onSubmit }, ref) => {
 });
 
 export default PromptInput;
-// END PromptInput.js

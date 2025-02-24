@@ -1,0 +1,39 @@
+.json-viewer-container {
+    margin-bottom: 20px;
+    border: 1px solid #ccc;
+    border-radius: 5px;
+  }
+  
+  .json-viewer-header {
+    padding: 10px;
+    background-color: #f0f0f0;
+    cursor: pointer;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid #ccc; /* Add border for separation when closed */
+  }
+  
+  .json-viewer-header.open {
+    background-color: #e0e0e0; /* Slightly darker when open */
+    border-bottom: none; /* Remove bottom border when open */
+  }
+  
+  .json-viewer-title {
+    font-size: 16px;
+    margin: 0;
+  }
+  
+  .json-viewer-arrow {
+    font-size: 16px;
+  }
+  
+  .json-viewer-content {
+    padding: 10px;
+    background-color: #fff;
+    border-top: none; /* Ensure seamless transition from header */
+  }
+  
+  .json-viewer {
+    font-size: 12px;
+  }
