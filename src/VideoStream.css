@@ -1,3 +1,4 @@
+/* BEGIN VideoStream.css */
 .video-stream-container {
     display: flex;
     flex-direction: column;
@@ -85,3 +86,4 @@
     object-fit: contain;
     cursor: pointer;
   }
+  /* END VideoStream.css */

@@ -47,6 +47,7 @@ function App() {
     window.electronAPI.on('toggle-bounding-box', () => {});
     window.electronAPI.on('perform-capture', () => {});
     window.electronAPI.on('reset-state', () => {});
+    window.electronAPI.on('log', () => {});
   };
 
   useEffect(() => {
@@ -60,7 +61,7 @@ function App() {
         const size = await window.electronAPI.getScreenSize();
         if (!size || size.width <= 0 || size.height <= 0) throw new Error('Invalid screen size');
         setScreenSize(size);
-        console.log('Screen size fetched:', size);
+        console.log('Screen size fetched: Width=' + size.width + ', Height=' + size.height);
       } catch (err) {
         console.error('Error fetching screen size:', err);
         setScreenSize({ width: 3440, height: 1440 });
@@ -105,13 +106,28 @@ function App() {
       });
     });
 
-    window.electronAPI.on('perform-capture', async ({ sourceId, x, y, width, height, mode, displayWidth, displayHeight }) => {
+    window.electronAPI.on('log', (label, data) => {
+      console.log(label + ':');
+      console.log('  Bounding Box (overlay): x=' + data.boundingBox.x + ', y=' + data.boundingBox.y + 
+                  ', width=' + data.boundingBox.width + ', height=' + data.boundingBox.height);
+      console.log('  Capture Area (display): x=' + data.captureArea.x + ', y=' + data.captureArea.y + 
+                  ', width=' + data.captureArea.width + ', height=' + data.captureArea.height);
+      console.log('  Metadata: cursor=(' + data.metadata.cursor.x + ', ' + data.metadata.cursor.y + 
+                  '), overlayOrigin=(' + data.metadata.overlayOrigin.x + ', ' + data.metadata.overlayOrigin.y + 
+                  '), displayBounds=(' + data.metadata.display.bounds.x + ', ' + data.metadata.display.bounds.y + 
+                  ', ' + data.metadata.display.bounds.width + ', ' + data.metadata.display.bounds.height + 
+                  '), scaleFactor=' + data.metadata.display.scaleFactor);
+    });
+
+    window.electronAPI.on('perform-capture', async (captureParams) => {
+      console.log('=== Starting perform-capture handler ===');
       try {
         const sources = await window.electronAPI.getDesktopSources();
-        const source = sources.find(s => s.id === sourceId);
-        if (!source) throw new Error(`Source not found: ${sourceId}`);
+        const source = sources.find(s => s.id === captureParams.sourceId);
+        if (!source) throw new Error(`Source not found: ${captureParams.sourceId}`);
 
-        console.log('Capture params:', { sourceId, x, y, width, height, mode, displayWidth, displayHeight });
+        console.log('Selected source ID:', captureParams.sourceId);
+        console.log('Requested displayWidth:', captureParams.displayWidth, 'displayHeight:', captureParams.displayHeight);
 
         const stream = await navigator.mediaDevices.getUserMedia({
           audio: false,
@@ -119,10 +135,10 @@ function App() {
             mandatory: {
               chromeMediaSource: 'desktop',
               chromeMediaSourceId: source.id,
-              minWidth: displayWidth,
-              maxWidth: displayWidth,
-              minHeight: displayHeight,
-              maxHeight: displayHeight,
+              minWidth: captureParams.displayWidth,
+              maxWidth: captureParams.displayWidth,
+              minHeight: captureParams.displayHeight,
+              maxHeight: captureParams.displayHeight,
             },
           },
         });
@@ -136,40 +152,70 @@ function App() {
           };
         });
         await video.play();
-        console.log('Stream video dimensions:', video.videoWidth, video.videoHeight);
+        console.log('Actual video dimensions: width=' + video.videoWidth + ', height=' + video.videoHeight);
 
-        const adjustedX = Math.max(0, Math.min(x, video.videoWidth - width));
-        const adjustedY = Math.max(0, Math.min(y, video.videoHeight - height));
-        console.log('Adjusted capture coordinates:', { adjustedX, adjustedY, width, height });
+        const scaleX = video.videoWidth / captureParams.displayWidth;
+        const scaleY = video.videoHeight / captureParams.displayHeight;
+        const scaledX = captureParams.x * scaleX;
+        const scaledY = captureParams.y * scaleY;
+        const captureWidth = captureParams.width * scaleX;
+        const captureHeight = captureParams.height * scaleY;
+
+        const finalX = Math.max(0, Math.min(scaledX, video.videoWidth - captureWidth));
+        const finalY = Math.max(0, Math.min(scaledY, video.videoHeight - captureHeight));
+
+        const outputScaleFactor = 2;
+        const outputWidth = captureParams.width * outputScaleFactor;
+        const outputHeight = captureParams.height * outputScaleFactor;
+
+        console.log('Capture Coordinate Validation:');
+        console.log('  Requested (from Main.js): x=' + captureParams.x + ', y=' + captureParams.y + ', width=' + captureParams.width + ', height=' + captureParams.height);
+        console.log('  Scaled for capture: x=' + scaledX + ', y=' + scaledY + ', width=' + captureWidth + ', height=' + captureHeight);
+        console.log('  Actual (clamped for capture): x=' + finalX + ', y=' + finalY + ', width=' + captureWidth + ', height=' + captureHeight);
+        console.log('  Output dimensions: width=' + outputWidth + ', height=' + outputHeight);
+        console.log('  Video dimensions: width=' + video.videoWidth + ', height=' + video.videoHeight);
 
         const canvas = document.createElement('canvas');
-        canvas.width = width;
-        canvas.height = height;
+        canvas.width = outputWidth;
+        canvas.height = outputHeight;
         const ctx = canvas.getContext('2d');
-        ctx.drawImage(video, adjustedX, adjustedY, width, height, 0, 0, width, height);
-        const dataUrl = canvas.toDataURL('image/jpeg', 0.5);
-        console.log('Bounding box frame captured:', dataUrl.substring(0, 50) + '...');
 
-        console.log('Capture coordinates before adjustment:', { x, y, width, height });
-        setBoundingBox({ x: adjustedX, y: adjustedY, width, height });
-        console.log('Bounding box set:', { x: adjustedX, y: adjustedY, width, height });
+        ctx.drawImage(video, finalX, finalY, captureWidth, captureHeight, 0, 0, outputWidth, outputHeight);
+
+        const imageData = ctx.getImageData(0, 0, outputWidth, outputHeight);
+        const data = imageData.data;
+        const sharpenedData = applySharpening(data, outputWidth, outputHeight);
+        ctx.putImageData(new ImageData(sharpenedData, outputWidth, outputHeight), 0, 0);
+
+        const dataUrl = canvas.toDataURL('image/jpeg', 0.9);
+        console.log('Bounding box frame captured: ' + dataUrl.substring(0, 50) + '...');
+
+        setBoundingBox({ x: finalX, y: finalY, width: captureWidth, height: captureHeight });
         setBoundingBoxFrame(dataUrl);
-        console.log('BoundingBoxFrame updated:', dataUrl.substring(0, 50) + '...');
 
-        if (mode === 'on-demand') {
+        if (isVideoFeedEnabled) {
+          setIsVideoFeedEnabled(false);
+          console.log('Video feed disabled after bounding box capture');
+        }
+
+        if (captureParams.mode === 'on-demand') {
           stream.getTracks().forEach(track => track.stop());
-        } else if (mode === 'continuous') {
+        } else if (captureParams.mode === 'continuous') {
           const interval = setInterval(() => {
-            ctx.drawImage(video, adjustedX, adjustedY, width, height, 0, 0, width, height);
-            const newDataUrl = canvas.toDataURL('image/jpeg', 0.5);
+            ctx.drawImage(video, finalX, finalY, captureWidth, captureHeight, 0, 0, outputWidth, outputHeight);
+            const continuousImageData = ctx.getImageData(0, 0, outputWidth, outputHeight);
+            const continuousData = continuousImageData.data;
+            const continuousSharpened = applySharpening(continuousData, outputWidth, outputHeight);
+            ctx.putImageData(new ImageData(continuousSharpened, outputWidth, outputHeight), 0, 0);
+            const newDataUrl = canvas.toDataURL('image/jpeg', 0.9);
             setBoundingBoxFrame(newDataUrl);
-            console.log('Continuous bounding box frame updated:', newDataUrl.substring(0, 50) + '...');
           }, 2000);
           window.electronAPI.on('disable-bounding-box', () => {
             clearInterval(interval);
             stream.getTracks().forEach(track => track.stop());
           });
         }
+        console.log('=== Perform-capture handler completed ===');
       } catch (err) {
         console.error('Capture failed:', err);
         setConversationHistory(prev => [...prev, { role: 'assistant', content: `Capture error: ${err.message}` }]);
@@ -179,7 +225,7 @@ function App() {
     window.electronAPI.on('reset-state', () => {
       console.log('Resetting app state on reload');
       setLatestFrame(null);
-      setBoundingBoxFrame(null);
+      if (!boundingBoxFrame) setBoundingBoxFrame(null);
       setBoundingBox(null);
       setIsBoundingBoxMode(false);
       window.electronAPI.toggleOverlay(false);
@@ -191,6 +237,49 @@ function App() {
       if (continuousInterval.current) clearInterval(continuousInterval.current);
     };
   }, []);
+
+  const applySharpening = (data, width, height) => {
+    const sharpened = new Uint8ClampedArray(data.length);
+    const kernel = [0, -1, 0, -1, 5, -1, 0, -1, 0];
+    const kernelSum = 1;
+
+    for (let y = 1; y < height - 1; y++) {
+      for (let x = 1; x < width - 1; x++) {
+        let r = 0, g = 0, b = 0;
+        for (let ky = -1; ky <= 1; ky++) {
+          for (let kx = -1; kx <= 1; kx++) {
+            const idx = ((y + ky) * width + (x + kx)) * 4;
+            const weight = kernel[(ky + 1) * 3 + (kx + 1)];
+            r += data[idx] * weight;
+            g += data[idx + 1] * weight;
+            b += data[idx + 2] * weight;
+          }
+        }
+        const outIdx = (y * width + x) * 4;
+        sharpened[outIdx] = Math.min(255, Math.max(0, r / kernelSum));
+        sharpened[outIdx + 1] = Math.min(255, Math.max(0, g / kernelSum));
+        sharpened[outIdx + 2] = Math.min(255, Math.max(0, b / kernelSum));
+        sharpened[outIdx + 3] = data[outIdx + 3];
+      }
+    }
+    for (let x = 0; x < width; x++) {
+      const topIdx = x * 4;
+      const bottomIdx = ((height - 1) * width + x) * 4;
+      for (let i = 0; i < 4; i++) {
+        sharpened[topIdx + i] = data[topIdx + i];
+        sharpened[bottomIdx + i] = data[bottomIdx + i];
+      }
+    }
+    for (let y = 0; y < height; y++) {
+      const leftIdx = (y * width) * 4;
+      const rightIdx = (y * width + width - 1) * 4;
+      for (let i = 0; i < 4; i++) {
+        sharpened[leftIdx + i] = data[leftIdx + i];
+        sharpened[rightIdx + i] = data[rightIdx + i];
+      }
+    }
+    return sharpened;
+  };
 
   useEffect(() => {
     if (mode !== 'continuous' || !continuousPrompt.trim() || !boundingBox) {
@@ -221,11 +310,15 @@ function App() {
     const img = new Image();
     img.onload = () => {
       const canvas = document.createElement('canvas');
-      canvas.width = box.width;
-      canvas.height = box.height;
+      const outputScaleFactor = 2;
+      canvas.width = box.width * outputScaleFactor;
+      canvas.height = box.height * outputScaleFactor;
       const ctx = canvas.getContext('2d');
-      ctx.drawImage(img, box.x, box.y, box.width, box.height, 0, 0, box.width, box.height);
-      const cropped = canvas.toDataURL('image/jpeg', 0.5);
+      ctx.drawImage(img, box.x, box.y, box.width, box.height, 0, 0, box.width * outputScaleFactor, box.height * outputScaleFactor);
+      const imageData = ctx.getImageData(0, 0, box.width * outputScaleFactor, box.height * outputScaleFactor);
+      const sharpenedData = applySharpening(imageData.data, box.width * outputScaleFactor, box.height * outputScaleFactor);
+      ctx.putImageData(new ImageData(sharpenedData, box.width * outputScaleFactor, box.height * outputScaleFactor), 0, 0);
+      const cropped = canvas.toDataURL('image/jpeg', 0.9);
       setCroppedFrame(cropped);
     };
     img.src = frame;
@@ -284,19 +377,23 @@ function App() {
   };
 
   const handlePrompt = async (systemPrompt, userPrompt, promptMode) => {
-    let frameToSend = isVideoFeedEnabled ? (boundingBoxFrame || croppedFrame || latestFrame) : null;
+    console.log('Frame states before sending:', { boundingBoxFrame, croppedFrame, latestFrame, isVideoFeedEnabled });
+    let frameToSend = null;
     let usedFullFrame = false;
 
-    // Removed the check that forces a frame or file upload
-    // if (!frameToSend && uploadedFiles.length === 0) {
-    //   setConversationHistory([...conversationHistory, { role: 'assistant', content: 'No frame or files available. Please select a video source or upload files.' }]);
-    //   return;
-    // }
-
-    if (isVideoFeedEnabled && !boundingBoxFrame && !croppedFrame && latestFrame) {
-      frameToSend = latestFrame;
-      usedFullFrame = true;
-      console.log('No bounding box set; defaulting to full video input:', frameToSend?.substring(0, 50) + '...');
+    if (isVideoFeedEnabled) {
+      frameToSend = latestFrame || croppedFrame; // Prefer latestFrame from video source
+      if (frameToSend === latestFrame) {
+        usedFullFrame = true;
+        console.log('Video feed enabled; using latest video source frame:', frameToSend?.substring(0, 50) + '...');
+      } else if (frameToSend === croppedFrame) {
+        console.log('Video feed enabled; using cropped frame:', frameToSend?.substring(0, 50) + '...');
+      }
+    } else if (boundingBoxFrame) {
+      frameToSend = boundingBoxFrame;
+      console.log('Video feed disabled, using existing bounding box frame:', frameToSend?.substring(0, 50) + '...');
+    } else {
+      console.log('Video feed disabled and no bounding box frame; sending prompt without image');
     }
 
     const apiKey = selectedModel === 'gpt-4o' ? openAiApiKey : anthropicApiKey;
@@ -327,7 +424,7 @@ function App() {
       {
         role: 'user',
         content: frameToSend ? [
-          { type: 'text', text: `Memories: ${JSON.stringify(relevantMemories)}\n${userPrompt}${usedFullFrame ? '\n(Note: Using full video input as no bounding box is set)' : ''}` },
+          { type: 'text', text: `Memories: ${JSON.stringify(relevantMemories)}\n${userPrompt}${usedFullFrame ? '\n(Note: Using full video input)' : ''}` },
           { type: 'image_url', image_url: { url: frameToSend } },
         ] : [
           { type: 'text', text: `Memories: ${JSON.stringify(relevantMemories)}\n${userPrompt}` },
@@ -355,7 +452,7 @@ function App() {
               {
                 role: 'user',
                 content: frameToSend ? [
-                  { type: 'text', text: `${systemPrompt}\nMemories: ${JSON.stringify(relevantMemories)}\n${userPrompt}${usedFullFrame ? '\n(Note: Using full video input as no bounding box is set)' : ''}` },
+                  { type: 'text', text: `${systemPrompt}\nMemories: ${JSON.stringify(relevantMemories)}\n${userPrompt}${usedFullFrame ? '\n(Note: Using full video input)' : ''}` },
                   { type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: frameToSend.split(',')[1] } },
                 ] : [
                   { type: 'text', text: `${systemPrompt}\nMemories: ${JSON.stringify(relevantMemories)}\n${userPrompt}` },
@@ -441,6 +538,11 @@ function App() {
     const enabled = e.target.checked;
     setIsVideoFeedEnabled(enabled);
     console.log('Video feed enabled:', enabled);
+    if (enabled && boundingBoxFrame) {
+      setBoundingBoxFrame(null);
+      setBoundingBox(null);
+      console.log('Cleared bounding box preview since video feed was enabled');
+    }
   };
 
   const getPromptInputValue = () => promptInputRef.current?.value || 'You are an AI assistant viewing a desktop area. Make observations or answer queries based on the captured frame.';
@@ -456,9 +558,11 @@ function App() {
   };
 
   const clearBoundingBoxPreview = () => {
-    console.log('Clearing bounding box preview');
-    setBoundingBoxFrame(null);
-    setBoundingBox(null);
+    if (window.confirm('Clear the current bounding box preview?')) {
+      console.log('Clearing bounding box preview');
+      setBoundingBoxFrame(null);
+      setBoundingBox(null);
+    }
   };
 
   if (isLoadingScreenSize) {
@@ -532,9 +636,7 @@ function App() {
         </div>
       </div>
 
-      {/* Bottom Section */}
       <div className="app-bottom">
-        {/* File Access Tool */}
         <div className="file-explorer-container">
           <div 
             className={`file-explorer-header ${isFileExplorerOpen ? 'open' : ''}`} 
@@ -577,7 +679,6 @@ function App() {
           )}
         </div>
 
-        {/* Full Conversation in JSON Tool */}
         <div className="json-viewer-container">
           <div 
             className={`json-viewer-header ${isJsonViewerOpen ? 'open' : ''}`} 

@@ -19,7 +19,6 @@ window.electronAPI.on('start-drawing', (mode) => {
   const ctx = canvas.getContext('2d');
 
   console.log('Canvas dimensions set to:', { width: canvas.width, height: canvas.height });
-  console.log('Window inner dimensions:', { width: window.innerWidth, height: window.innerHeight });
 
   const drawBox = () => {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -42,20 +41,7 @@ window.electronAPI.on('start-drawing', (mode) => {
   };
 
   const handleMouseMove = (e) => {
-    if (document.documentElement.style.cursor !== 'crosshair') {
-      document.documentElement.style.cursor = 'crosshair';
-    }
-
     if (!isDrawing || startX === undefined || startY === undefined) return;
-
-    const totalWidth = window.innerWidth;
-    const percentageX = (e.clientX / totalWidth) * 100;
-    console.log('Mouse move at:', {
-      clientX: e.clientX,
-      clientY: e.clientY,
-      percentageX: percentageX.toFixed(2) + '%',
-      totalWidth,
-    });
 
     box.width = e.clientX - startX;
     box.height = e.clientY - startY;
@@ -69,10 +55,10 @@ window.electronAPI.on('start-drawing', (mode) => {
   const handleMouseUp = (e) => {
     if (!isDrawing || !box) return;
     isDrawing = false;
-    console.log('Bounding box finalized:', box);
+    console.log('Overlay.js: Bounding box finalized:', box);
     window.electronAPI.send('capture-area', { ...box, mode });
     window.electronAPI.send('enable-interaction', box);
-    window.electronAPI.send('disable-bounding-box'); // Trigger cleanup
+    window.electronAPI.send('disable-bounding-box');
   };
 
   document.addEventListener('mousedown', handleMouseDown, { passive: false });
@@ -88,6 +74,7 @@ window.electronAPI.on('start-drawing', (mode) => {
     document.removeEventListener('mouseup', handleMouseUp);
     document.body.removeChild(canvas);
     document.documentElement.style.cursor = 'default';
+    console.log('Overlay cleanup complete');
   };
 
   window.electronAPI.on('disable-bounding-box', () => {

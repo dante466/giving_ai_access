@@ -1,59 +1,40 @@
 // BEGIN memoryManager.js
-import { useState, useEffect } from 'react';
-
-const MEMORY_FILE = 'memories.json';
+import { useEffect, useState } from 'react';
 
 const useMemory = () => {
   const [memories, setMemories] = useState([]);
-  const [isReady, setIsReady] = useState(false);
 
   useEffect(() => {
-    if (!window.electronAPI) {
-      console.warn('Waiting for Electron API...');
-      const checkAPI = setInterval(async () => {
-        if (window.electronAPI) {
-          clearInterval(checkAPI);
-          loadMemories();
+    const loadMemories = () => {
+      try {
+        const memoriesData = window.electronAPI.readFileSync('memories.json', 'utf8');
+        if (!memoriesData) {
+          console.log('Memories file is empty or does not exist, initializing with empty array');
+          setMemories([]);
+          window.electronAPI.writeFileSync('memories.json', JSON.stringify([]));
+          return;
         }
-      }, 100);
-      return;
-    }
-    loadMemories(); 
-  }, []);
- 
-  const loadMemories = async () => {
-    try {
-      const exists = await window.electronAPI.existsSync(MEMORY_FILE);
-      if (exists) {
-        const data = await window.electronAPI.readFileSync(MEMORY_FILE, 'utf8');
-        setMemories(JSON.parse(data));
+        setMemories(JSON.parse(memoriesData));
+      } catch (err) {
+        console.log('Failed to load memories:', err);
+        setMemories([]);
+        window.electronAPI.writeFileSync('memories.json', JSON.stringify([]));
       }
-      setIsReady(true);
-    } catch (err) {
-      console.error('Failed to load memories:', err);
-    }
-  };
+    };
+    loadMemories();
+  }, []);
 
-  const saveMemory = async (memory) => {
-    if (!window.electronAPI) {
-      console.error('Cannot save memory: Electron API unavailable');
-      return;
-    }
-    const newMemories = [...memories, { id: Date.now(), ...memory }];
-    try {
-      await window.electronAPI.writeFileSync(MEMORY_FILE, JSON.stringify(newMemories, null, 2));
-      setMemories(newMemories);
-    } catch (err) {
-      console.error('Failed to save memory:', err);
-    }
+  const saveMemory = (memory) => {
+    const newMemories = [...memories, { ...memory, timestamp: Date.now() }];
+    setMemories(newMemories);
+    window.electronAPI.writeFileSync('memories.json', JSON.stringify(newMemories));
   };
 
   const getRelevantMemories = (prompt) => {
-    if (!isReady) return [];
-    const keyword = prompt.split(' ')[0].toLowerCase();
     return memories
-      .filter((m) => m.description.toLowerCase().includes(keyword))
-      .slice(-5);
+      .filter(m => m.description.toLowerCase().includes(prompt.toLowerCase()))
+      .sort((a, b) => b.timestamp - a.timestamp)
+      .slice(0, 3);
   };
 
   return { saveMemory, getRelevantMemories };

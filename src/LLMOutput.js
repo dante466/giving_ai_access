@@ -1,3 +1,4 @@
+// BEGIN LLMOutput.js
 import React from 'react';
 import './LLMOutput.css';
 
@@ -11,3 +12,4 @@ const LLMOutput = ({ response }) => (
 );
 
 export default LLMOutput;
+// END LLMOutput.js

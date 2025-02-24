@@ -1,3 +1,4 @@
+// BEGIN PromptInput.js
 import React, { useState, useEffect, forwardRef, useImperativeHandle } from 'react';
 import './PromptInput.css';
 
@@ -48,3 +49,4 @@ const PromptInput = forwardRef(({ onSubmit }, ref) => {
 });
 
 export default PromptInput;
+// END PromptInput.js

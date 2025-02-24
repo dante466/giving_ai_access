@@ -1,3 +1,4 @@
+// BEGIN VideoStream.js
 import React, { useEffect, useRef, useState, useCallback, memo } from 'react';
 import './VideoStream.css';
 
@@ -224,3 +225,4 @@ const VideoStream = memo(({ onFrame = () => {}, isBoundingBoxMode, onBoundingBox
 });
 
 export default VideoStream;
+// END VideoStream.js

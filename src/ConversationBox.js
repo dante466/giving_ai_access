@@ -1,3 +1,4 @@
+// BEGIN ConversationBox.js
 import React, { useEffect, useRef } from 'react';
 import './ConversationBox.css';
 
@@ -122,3 +123,4 @@ const ConversationBox = ({
 };
 
 export default ConversationBox;
+// END ConversationBox.js
